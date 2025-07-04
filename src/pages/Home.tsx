@@ -2,9 +2,21 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { Search, Star, Shield, Clock, ArrowRight, Users, CheckCircle } from 'lucide-react';
 import { mockCategories, mockServices as services } from '../data/mockData';
+import { useLocation } from '../context/LocationContext';
 import ServiceCard from '../components/ServiceCard';
+import LocationSelector from '../components/LocationSelector';
 
 const Home: React.FC = () => {
+  const { selectedState, selectedCity, setSelectedState, setSelectedCity } = useLocation();
+
+  // Filter services based on selected location for featured section
+  const featuredServices = services.filter(service => {
+    if (!selectedState && !selectedCity) return true;
+    if (selectedState && !selectedCity) return service.state === selectedState;
+    if (selectedState && selectedCity) return service.state === selectedState && service.city === selectedCity;
+    return true;
+  }).slice(0, 4);
+
   return (
     <div className="min-h-screen">
       {/* Hero Section */}
@@ -20,6 +32,18 @@ const Home: React.FC = () => {
                 From carpentry to plumbing, find quality service providers in your city.
               </p>
               
+              {/* Location Selector */}
+              <div className="mb-8">
+                <h3 className="text-lg font-medium text-gray-900 mb-4">Select your location:</h3>
+                <LocationSelector
+                  selectedState={selectedState}
+                  selectedCity={selectedCity}
+                  onStateChange={setSelectedState}
+                  onCityChange={setSelectedCity}
+                  className="justify-start"
+                />
+              </div>
+
               {/* Search Bar */}
               <div className="relative mb-8">
                 <div className="flex bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden">
@@ -28,10 +52,13 @@ const Home: React.FC = () => {
                     placeholder="What service do you need? (e.g., AC repair, painting)"
                     className="flex-1 px-6 py-4 text-lg border-none outline-none"
                   />
-                  <button className="bg-orange-600 text-white px-8 py-4 hover:bg-orange-700 transition-colors flex items-center">
+                  <Link
+                    to="/services"
+                    className="bg-orange-600 text-white px-8 py-4 hover:bg-orange-700 transition-colors flex items-center"
+                  >
                     <Search className="w-5 h-5 mr-2" />
                     Search
-                  </button>
+                  </Link>
                 </div>
               </div>
 
@@ -148,8 +175,15 @@ const Home: React.FC = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-end mb-12">
             <div>
-              <h2 className="text-4xl font-bold text-gray-900 mb-4">Featured Services</h2>
-              <p className="text-xl text-gray-600">Top-rated services from trusted professionals across India</p>
+              <h2 className="text-4xl font-bold text-gray-900 mb-4">
+                Featured Services
+                {(selectedState || selectedCity) && (
+                  <span className="text-orange-600 text-2xl ml-2">
+                    in {selectedCity ? `${selectedCity}, ` : ''}{selectedState}
+                  </span>
+                )}
+              </h2>
+              <p className="text-xl text-gray-600">Top-rated services from trusted professionals</p>
             </div>
             <Link
               to="/services"
@@ -160,11 +194,29 @@ const Home: React.FC = () => {
             </Link>
           </div>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {services.slice(0, 4).map((service) => (
-              <ServiceCard key={service.id} service={service} />
-            ))}
-          </div>
+          {featuredServices.length > 0 ? (
+            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+              {featuredServices.map((service) => (
+                <ServiceCard key={service.id} service={service} />
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-12 bg-gray-50 rounded-lg">
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">No services available</h3>
+              <p className="text-gray-600 mb-4">
+                No services found in {selectedCity ? `${selectedCity}, ` : ''}{selectedState}
+              </p>
+              <button
+                onClick={() => {
+                  setSelectedState('');
+                  setSelectedCity('');
+                }}
+                className="text-orange-600 hover:text-orange-700 font-medium"
+              >
+                View services in all locations
+              </button>
+            </div>
+          )}
         </div>
       </section>
 

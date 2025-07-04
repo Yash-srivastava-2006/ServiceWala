@@ -1,7 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import { Search, Filter, Star, MapPin, SlidersHorizontal } from 'lucide-react';
 import { mockServices as services, mockCategories } from '../data/mockData';
+import { useLocation } from '../context/LocationContext';
 import ServiceCard from '../components/ServiceCard';
+import LocationSelector from '../components/LocationSelector';
 
 const Services: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -10,6 +12,8 @@ const Services: React.FC = () => {
   const [rating, setRating] = useState('');
   const [sortBy, setSortBy] = useState('rating');
   const [showFilters, setShowFilters] = useState(false);
+  
+  const { selectedState, selectedCity, setSelectedState, setSelectedCity } = useLocation();
 
   const filteredServices = useMemo(() => {
     let filtered = [...services];
@@ -21,6 +25,14 @@ const Services: React.FC = () => {
         service.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
         service.category.toLowerCase().includes(searchTerm.toLowerCase())
       );
+    }
+
+    // Filter by location
+    if (selectedState) {
+      filtered = filtered.filter(service => service.state === selectedState);
+    }
+    if (selectedCity) {
+      filtered = filtered.filter(service => service.city === selectedCity);
     }
 
     // Filter by category
@@ -63,7 +75,7 @@ const Services: React.FC = () => {
     });
 
     return filtered;
-  }, [searchTerm, selectedCategory, priceRange, rating, sortBy]);
+  }, [searchTerm, selectedState, selectedCity, selectedCategory, priceRange, rating, sortBy]);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -80,7 +92,18 @@ const Services: React.FC = () => {
               placeholder="Search for services..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+            />
+          </div>
+
+          {/* Location Selector */}
+          <div className="mb-6">
+            <LocationSelector
+              selectedState={selectedState}
+              selectedCity={selectedCity}
+              onStateChange={setSelectedState}
+              onCityChange={setSelectedCity}
+              className="justify-start"
             />
           </div>
 
@@ -110,7 +133,7 @@ const Services: React.FC = () => {
                 <select
                   value={selectedCategory}
                   onChange={(e) => setSelectedCategory(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                 >
                   <option value="">All Categories</option>
                   {mockCategories.map((category) => (
@@ -129,13 +152,13 @@ const Services: React.FC = () => {
                 <select
                   value={priceRange}
                   onChange={(e) => setPriceRange(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                 >
                   <option value="">Any Price</option>
+                  <option value="50-100">₹50 - ₹100</option>
                   <option value="100-200">₹100 - ₹200</option>
                   <option value="200-500">₹200 - ₹500</option>
-                  <option value="500-1000">₹500 - ₹1000</option>
-                  <option value="1000">₹1000+</option>
+                  <option value="500">₹500+</option>
                 </select>
               </div>
 
@@ -147,7 +170,7 @@ const Services: React.FC = () => {
                 <select
                   value={rating}
                   onChange={(e) => setRating(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                 >
                   <option value="">Any Rating</option>
                   <option value="4.5">4.5+ Stars</option>
@@ -164,8 +187,10 @@ const Services: React.FC = () => {
                   setSelectedCategory('');
                   setPriceRange('');
                   setRating('');
+                  setSelectedState('');
+                  setSelectedCity('');
                 }}
-                className="w-full text-blue-600 hover:text-blue-700 font-medium text-sm"
+                className="w-full text-orange-600 hover:text-orange-700 font-medium text-sm"
               >
                 Clear All Filters
               </button>
@@ -178,13 +203,18 @@ const Services: React.FC = () => {
             <div className="flex justify-between items-center mb-6">
               <p className="text-gray-600">
                 {filteredServices.length} service(s) found
+                {(selectedState || selectedCity) && (
+                  <span className="text-orange-600 ml-1">
+                    in {selectedCity ? `${selectedCity}, ` : ''}{selectedState}
+                  </span>
+                )}
               </p>
               <div className="flex items-center space-x-2">
                 <label className="text-sm text-gray-600">Sort by:</label>
                 <select
                   value={sortBy}
                   onChange={(e) => setSortBy(e.target.value)}
-                  className="border border-gray-300 rounded-lg px-3 py-1 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="border border-gray-300 rounded-lg px-3 py-1 text-sm focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                 >
                   <option value="rating">Highest Rated</option>
                   <option value="price-low">Price: Low to High</option>
@@ -207,9 +237,23 @@ const Services: React.FC = () => {
                   <Search className="w-16 h-16 mx-auto" />
                 </div>
                 <h3 className="text-xl font-semibold text-gray-900 mb-2">No services found</h3>
-                <p className="text-gray-600">
-                  Try adjusting your search criteria or browse all services
+                <p className="text-gray-600 mb-4">
+                  {(selectedState || selectedCity) ? 
+                    `No services available in ${selectedCity ? `${selectedCity}, ` : ''}${selectedState}` :
+                    'Try adjusting your search criteria or browse all services'
+                  }
                 </p>
+                {(selectedState || selectedCity) && (
+                  <button
+                    onClick={() => {
+                      setSelectedState('');
+                      setSelectedCity('');
+                    }}
+                    className="text-orange-600 hover:text-orange-700 font-medium"
+                  >
+                    View all locations
+                  </button>
+                )}
               </div>
             )}
           </div>

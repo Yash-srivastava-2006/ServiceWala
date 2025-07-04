@@ -9,6 +9,19 @@ export const mockCategories = [
   { name: "Gardening", icon: "🌱", count: 10 }
 ];
 
+export const indianStates = [
+  { name: "Delhi", cities: ["New Delhi", "Old Delhi", "Dwarka", "Rohini", "Lajpat Nagar"] },
+  { name: "Maharashtra", cities: ["Mumbai", "Pune", "Nagpur", "Nashik", "Aurangabad"] },
+  { name: "Karnataka", cities: ["Bangalore", "Mysore", "Hubli", "Mangalore", "Belgaum"] },
+  { name: "Tamil Nadu", cities: ["Chennai", "Coimbatore", "Madurai", "Salem", "Tiruchirappalli"] },
+  { name: "Gujarat", cities: ["Ahmedabad", "Surat", "Vadodara", "Rajkot", "Bhavnagar"] },
+  { name: "Rajasthan", cities: ["Jaipur", "Jodhpur", "Udaipur", "Kota", "Bikaner"] },
+  { name: "West Bengal", cities: ["Kolkata", "Howrah", "Durgapur", "Asansol", "Siliguri"] },
+  { name: "Uttar Pradesh", cities: ["Lucknow", "Kanpur", "Ghaziabad", "Agra", "Varanasi"] },
+  { name: "Haryana", cities: ["Gurgaon", "Faridabad", "Panipat", "Ambala", "Karnal"] },
+  { name: "Punjab", cities: ["Chandigarh", "Ludhiana", "Amritsar", "Jalandhar", "Patiala"] }
+];
+
 export const mockServices = [
   {
     id: 1,
@@ -22,8 +35,10 @@ export const mockServices = [
     reviewCount: 87,
     images: ["https://images.pexels.com/photos/1216544/pexels-photo-1216544.jpeg?auto=compress&cs=tinysrgb&w=500"],
     providerId: "provider-1",
-    availability: "Available",
-    location: "City Center",
+    availability: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
+    location: "Sadar Bazar",
+    state: "Delhi",
+    city: "New Delhi",
     tags: ["woodwork", "modular", "custom"],
     provider: {
       id: "provider-1",
@@ -34,7 +49,9 @@ export const mockServices = [
       yearsExperience: 12,
       verified: true,
       specialties: ["Furniture", "Cabinetry", "Repairs"],
-      reviewCount: 220
+      reviewCount: 220,
+      avatar: "https://images.pexels.com/photos/1681010/pexels-photo-1681010.jpeg?auto=compress&cs=tinysrgb&w=150",
+      location: "Sadar Bazar, New Delhi"
     }
   },
   {
@@ -44,24 +61,28 @@ export const mockServices = [
     price: 100,
     priceType: "hourly" as const,
     duration: "1-2 hours",
-    category: "Electrician",
+    category: "Electrical",
     rating: 4.6,
     reviewCount: 76,
     images: ["https://images.pexels.com/photos/4254166/pexels-photo-4254166.jpeg?auto=compress&cs=tinysrgb&w=500"],
     providerId: "provider-2",
-    availability: "Available",
-    location: "All Areas",
+    availability: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"],
+    location: "Lajpat Nagar",
+    state: "Delhi",
+    city: "New Delhi",
     tags: ["certified", "emergency", "switches"],
     provider: {
       id: "provider-2",
-      name: "QuickVolt",
+      name: "Ramesh Electrician",
       rating: 4.6,
       completedJobs: 190,
       bio: "Certified electricians for home and office repairs",
       yearsExperience: 8,
       verified: true,
       specialties: ["Wiring", "Fans", "Circuit Breakers"],
-      reviewCount: 190
+      reviewCount: 190,
+      avatar: "https://images.pexels.com/photos/1516680/pexels-photo-1516680.jpeg?auto=compress&cs=tinysrgb&w=150",
+      location: "Lajpat Nagar, New Delhi"
     }
   },
   {
@@ -76,19 +97,23 @@ export const mockServices = [
     reviewCount: 132,
     images: ["https://images.pexels.com/photos/6474455/pexels-photo-6474455.jpeg?auto=compress&cs=tinysrgb&w=500"],
     providerId: "provider-3",
-    availability: "Available",
-    location: "Metro Area",
+    availability: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
+    location: "Connaught Place",
+    state: "Delhi",
+    city: "New Delhi",
     tags: ["interior", "exterior", "quick-dry"],
     provider: {
       id: "provider-3",
-      name: "ColorCrew",
+      name: "Rajesh Painter",
       rating: 4.8,
       completedJobs: 300,
       bio: "Transforming homes with vibrant and lasting paint",
       yearsExperience: 10,
       verified: true,
       specialties: ["Interior Painting", "Texturing", "Waterproofing"],
-      reviewCount: 300
+      reviewCount: 300,
+      avatar: "https://images.pexels.com/photos/1043471/pexels-photo-1043471.jpeg?auto=compress&cs=tinysrgb&w=150",
+      location: "Connaught Place, New Delhi"
     }
   },
   {
@@ -103,19 +128,23 @@ export const mockServices = [
     reviewCount: 98,
     images: ["https://images.pexels.com/photos/532192/pexels-photo-532192.jpeg?auto=compress&cs=tinysrgb&w=500"],
     providerId: "provider-4",
-    availability: "Available",
-    location: "Local Area",
+    availability: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"],
+    location: "Rohini",
+    state: "Delhi",
+    city: "New Delhi",
     tags: ["odourless", "safe", "termite"],
     provider: {
       id: "provider-4",
-      name: "PestAway",
+      name: "Delhi Pest Control",
       rating: 4.7,
       completedJobs: 180,
       bio: "Eco-friendly pest control services for all spaces",
       yearsExperience: 6,
       verified: true,
       specialties: ["Termites", "Cockroaches", "Rodents"],
-      reviewCount: 180
+      reviewCount: 180,
+      avatar: "https://images.pexels.com/photos/1222271/pexels-photo-1222271.jpeg?auto=compress&cs=tinysrgb&w=150",
+      location: "Rohini, New Delhi"
     }
   },
   {
@@ -130,19 +159,23 @@ export const mockServices = [
     reviewCount: 210,
     images: ["https://images.pexels.com/photos/4239146/pexels-photo-4239146.jpeg?auto=compress&cs=tinysrgb&w=500"],
     providerId: "provider-5",
-    availability: "Available",
-    location: "Downtown",
+    availability: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
+    location: "Jama Masjid",
+    state: "Delhi",
+    city: "Old Delhi",
     tags: ["deep-cleaning", "kitchen", "bathroom"],
     provider: {
       id: "provider-5",
-      name: "SparkleShine",
+      name: "Saaf Safai Services",
       rating: 4.9,
       completedJobs: 400,
       bio: "Top-rated home cleaners using safe and hygienic methods",
       yearsExperience: 9,
       verified: true,
       specialties: ["Full Home", "Bathrooms", "Eco Clean"],
-      reviewCount: 400
+      reviewCount: 400,
+      avatar: "https://images.pexels.com/photos/1181686/pexels-photo-1181686.jpeg?auto=compress&cs=tinysrgb&w=150",
+      location: "Jama Masjid, Old Delhi"
     }
   },
   {
@@ -157,19 +190,23 @@ export const mockServices = [
     reviewCount: 144,
     images: ["https://images.pexels.com/photos/8486944/pexels-photo-8486944.jpeg?auto=compress&cs=tinysrgb&w=500"],
     providerId: "provider-6",
-    availability: "Available",
-    location: "City Wide",
+    availability: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"],
+    location: "Dwarka",
+    state: "Delhi",
+    city: "Dwarka",
     tags: ["faucet", "leak", "pipes"],
     provider: {
       id: "provider-6",
-      name: "AquaFix",
+      name: "AquaFix Delhi",
       rating: 4.5,
       completedJobs: 250,
       bio: "Trusted plumbing solutions with quick turnaround",
       yearsExperience: 7,
       verified: true,
       specialties: ["Leak Repair", "Toilet Fix", "Drain Cleaning"],
-      reviewCount: 250
+      reviewCount: 250,
+      avatar: "https://images.pexels.com/photos/1681010/pexels-photo-1681010.jpeg?auto=compress&cs=tinysrgb&w=150",
+      location: "Dwarka, Delhi"
     }
   },
   {
@@ -184,19 +221,86 @@ export const mockServices = [
     reviewCount: 104,
     images: ["https://images.pexels.com/photos/1301856/pexels-photo-1301856.jpeg?auto=compress&cs=tinysrgb&w=500"],
     providerId: "provider-7",
-    availability: "Available",
-    location: "Suburban Areas",
+    availability: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
+    location: "Sewa Park",
+    state: "Delhi",
+    city: "New Delhi",
     tags: ["trimming", "watering", "soil"],
     provider: {
       id: "provider-7",
-      name: "GreenScape",
+      name: "GreenGreen Gardens",
       rating: 4.6,
       completedJobs: 260,
       bio: "Maintaining beautiful gardens with seasonal care",
       yearsExperience: 10,
       verified: true,
       specialties: ["Maintenance", "Soil Care", "Landscaping"],
-      reviewCount: 260
+      reviewCount: 260,
+      avatar: "https://images.pexels.com/photos/1516680/pexels-photo-1516680.jpeg?auto=compress&cs=tinysrgb&w=150",
+      location: "Sewa Park, New Delhi"
+    }
+  },
+  // Mumbai services
+  {
+    id: 8,
+    title: "AC Repair & Service",
+    description: "Professional AC repair and maintenance services",
+    price: 150,
+    priceType: "fixed" as const,
+    duration: "2-3 hours",
+    category: "Appliance Repair",
+    rating: 4.7,
+    reviewCount: 89,
+    images: ["https://images.pexels.com/photos/4254166/pexels-photo-4254166.jpeg?auto=compress&cs=tinysrgb&w=500"],
+    providerId: "provider-8",
+    availability: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"],
+    location: "Bandra",
+    state: "Maharashtra",
+    city: "Mumbai",
+    tags: ["AC repair", "maintenance", "cooling"],
+    provider: {
+      id: "provider-8",
+      name: "Cool Air Mumbai",
+      rating: 4.7,
+      completedJobs: 180,
+      bio: "Expert AC technicians for all brands and models",
+      yearsExperience: 8,
+      verified: true,
+      specialties: ["AC Repair", "Installation", "Maintenance"],
+      reviewCount: 180,
+      avatar: "https://images.pexels.com/photos/1043471/pexels-photo-1043471.jpeg?auto=compress&cs=tinysrgb&w=150",
+      location: "Bandra, Mumbai"
+    }
+  },
+  {
+    id: 9,
+    title: "Interior Painting",
+    description: "Premium interior painting services for homes and offices",
+    price: 250,
+    priceType: "fixed" as const,
+    duration: "Full day",
+    category: "Painting",
+    rating: 4.8,
+    reviewCount: 156,
+    images: ["https://images.pexels.com/photos/6474455/pexels-photo-6474455.jpeg?auto=compress&cs=tinysrgb&w=500"],
+    providerId: "provider-9",
+    availability: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
+    location: "Andheri",
+    state: "Maharashtra",
+    city: "Mumbai",
+    tags: ["interior", "premium", "office"],
+    provider: {
+      id: "provider-9",
+      name: "Mumbai Painters",
+      rating: 4.8,
+      completedJobs: 320,
+      bio: "Premium painting services for modern homes",
+      yearsExperience: 12,
+      verified: true,
+      specialties: ["Interior Design", "Color Consultation", "Premium Finishes"],
+      reviewCount: 320,
+      avatar: "https://images.pexels.com/photos/1222271/pexels-photo-1222271.jpeg?auto=compress&cs=tinysrgb&w=150",
+      location: "Andheri, Mumbai"
     }
   }
 ];

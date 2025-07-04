@@ -1,13 +1,16 @@
 import React, { useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation as useRouterLocation } from 'react-router-dom';
 import { Menu, X, User, LogOut, Briefcase, Settings, Calendar, UserCircle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useLocation } from '../context/LocationContext';
+import LocationSelector from './LocationSelector';
 
 const Navbar: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const { user, logout } = useAuth();
-  const location = useLocation();
+  const { selectedState, selectedCity, setSelectedState, setSelectedCity } = useLocation();
+  const location = useRouterLocation();
 
   const isActive = (path: string) => location.pathname === path;
 
@@ -29,7 +32,7 @@ const Navbar: React.FC = () => {
         <div className="flex justify-between items-center h-16">
           {/* Logo */}
           <Link to="/" className="flex items-center space-x-2">
-            <Briefcase className="h-8 w-8 text-blue-600" />
+            <Briefcase className="h-8 w-8 text-orange-600" />
             <span className="text-xl font-bold text-gray-900">ServiceWala</span>
           </Link>
 
@@ -41,13 +44,23 @@ const Navbar: React.FC = () => {
                 to={link.path}
                 className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
                   isActive(link.path)
-                    ? 'text-blue-600 bg-blue-50'
-                    : 'text-gray-700 hover:text-blue-600 hover:bg-gray-50'
+                    ? 'text-orange-600 bg-orange-50'
+                    : 'text-gray-700 hover:text-orange-600 hover:bg-gray-50'
                 }`}
               >
                 {link.label}
               </Link>
             ))}
+          </div>
+
+          {/* Location Selector */}
+          <div className="hidden lg:flex">
+            <LocationSelector
+              selectedState={selectedState}
+              selectedCity={selectedCity}
+              onStateChange={setSelectedState}
+              onCityChange={setSelectedCity}
+            />
           </div>
 
           {/* User Menu */}
@@ -59,7 +72,7 @@ const Navbar: React.FC = () => {
                   className="flex items-center space-x-2 px-3 py-2 rounded-md hover:bg-gray-50 transition-colors"
                 >
                   <img
-                    src={user.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=3b82f6&color=fff`}
+                    src={user.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=f97316&color=fff`}
                     alt={user.name}
                     className="h-8 w-8 rounded-full"
                   />
@@ -97,13 +110,13 @@ const Navbar: React.FC = () => {
               <div className="flex items-center space-x-4">
                 <Link
                   to="/login"
-                  className="text-gray-700 hover:text-blue-600 px-3 py-2 rounded-md text-sm font-medium transition-colors"
+                  className="text-gray-700 hover:text-orange-600 px-3 py-2 rounded-md text-sm font-medium transition-colors"
                 >
                   Login
                 </Link>
                 <Link
                   to="/signup"
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors"
+                  className="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors"
                 >
                   Sign Up
                 </Link>
@@ -115,7 +128,7 @@ const Navbar: React.FC = () => {
           <div className="md:hidden">
             <button
               onClick={() => setIsOpen(!isOpen)}
-              className="text-gray-700 hover:text-blue-600 focus:outline-none focus:text-blue-600"
+              className="text-gray-700 hover:text-orange-600 focus:outline-none focus:text-orange-600"
             >
               {isOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
             </button>
@@ -126,6 +139,17 @@ const Navbar: React.FC = () => {
         {isOpen && (
           <div className="md:hidden">
             <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3 bg-gray-50">
+              {/* Mobile Location Selector */}
+              <div className="px-3 py-2">
+                <LocationSelector
+                  selectedState={selectedState}
+                  selectedCity={selectedCity}
+                  onStateChange={setSelectedState}
+                  onCityChange={setSelectedCity}
+                  className="justify-start"
+                />
+              </div>
+
               {navLinks.map((link) => (
                 <Link
                   key={link.path}
@@ -133,8 +157,8 @@ const Navbar: React.FC = () => {
                   onClick={() => setIsOpen(false)}
                   className={`block px-3 py-2 rounded-md text-base font-medium transition-colors ${
                     isActive(link.path)
-                      ? 'text-blue-600 bg-blue-100'
-                      : 'text-gray-700 hover:text-blue-600 hover:bg-gray-100'
+                      ? 'text-orange-600 bg-orange-100'
+                      : 'text-gray-700 hover:text-orange-600 hover:bg-gray-100'
                   }`}
                 >
                   {link.label}
@@ -145,7 +169,7 @@ const Navbar: React.FC = () => {
                 <div className="pt-4 pb-3 border-t border-gray-200">
                   <div className="flex items-center px-3 mb-3">
                     <img
-                      src={user.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=3b82f6&color=fff`}
+                      src={user.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=f97316&color=fff`}
                       alt={user.name}
                       className="h-8 w-8 rounded-full mr-3"
                     />
@@ -157,7 +181,7 @@ const Navbar: React.FC = () => {
                       key={item.path}
                       to={item.path}
                       onClick={() => setIsOpen(false)}
-                      className="flex items-center space-x-2 px-3 py-2 text-base font-medium text-gray-700 hover:text-blue-600 transition-colors"
+                      className="flex items-center space-x-2 px-3 py-2 text-base font-medium text-gray-700 hover:text-orange-600 transition-colors"
                     >
                       <item.icon className="h-4 w-4" />
                       <span>{item.label}</span>
@@ -180,14 +204,14 @@ const Navbar: React.FC = () => {
                   <Link
                     to="/login"
                     onClick={() => setIsOpen(false)}
-                    className="block px-3 py-2 text-base font-medium text-gray-700 hover:text-blue-600 transition-colors"
+                    className="block px-3 py-2 text-base font-medium text-gray-700 hover:text-orange-600 transition-colors"
                   >
                     Login
                   </Link>
                   <Link
                     to="/signup"
                     onClick={() => setIsOpen(false)}
-                    className="block px-3 py-2 text-base font-medium bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                    className="block px-3 py-2 text-base font-medium bg-orange-600 text-white rounded-md hover:bg-orange-700 transition-colors"
                   >
                     Sign Up
                   </Link>

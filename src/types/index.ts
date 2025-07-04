@@ -1,62 +1,77 @@
-export interface User {
+export interface Service {
+  id: string | number;
+  title: string;
+  description: string;
+  price: number;
+  priceType: 'fixed' | 'hourly';
+  duration: string;
+  category: string;
+  rating: number;
+  reviewCount: number;
+  images: string[];
+  providerId: string;
+  availability: string[];
+  location: string;
+  state: string;
+  city: string;
+  tags: string[];
+  provider: {
     id: string;
     name: string;
-    email: string;
-    type: 'provider' | 'customer';
-    avatar?: string;
-    phone?: string;
-    location?: string;
-  }
-  
-  export interface Service {
-    id: string;
-    title: string;
-    description: string;
-    category: string;
-    price: number;
-    priceType: 'hour' | 'fixed' | 'day';
-    providerId: string;
-    provider: ServiceProvider;
-    images: string[];
     rating: number;
-    reviewCount: number;
-    availability: string[];
-    location: string;
-    tags: string[];
-  }
-  
-  export interface ServiceProvider {
-    id: string;
-    name: string;
-    avatar: string;
+    completedJobs: number;
     bio: string;
-    rating: number;
-    reviewCount: number;
     yearsExperience: number;
-    location: string;
     verified: boolean;
     specialties: string[];
-    completedJobs: number;
-  }
-  
-  export interface Booking {
-    id: string;
-    serviceId: string;
-    customerId: string;
-    providerId: string;
-    date: string;
-    time: string;
-    status: 'pending' | 'confirmed' | 'completed' | 'cancelled';
-    message?: string;
-    totalAmount: number;
-  }
-  
-  export interface Review {
-    id: string;
-    serviceId: string;
-    customerId: string;
-    customerName: string;
-    rating: number;
-    comment: string;
-    date: string;
-  }
+    reviewCount: number;
+    avatar: string;
+    location: string;
+  };
+}
+
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  avatar?: string;
+  role: 'client' | 'provider';
+  phone?: string;
+  location?: string;
+  joinedDate?: string;
+  verified?: boolean;
+}
+
+export interface AuthContextType {
+  user: User | null;
+  login: (email: string, password: string) => Promise<void>;
+  signup: (name: string, email: string, password: string, role: 'client' | 'provider') => Promise<void>;
+  logout: () => void;
+  updateProfile: (updates: Partial<User>) => void;
+  isLoading: boolean;
+}
+
+export interface FilterOptions {
+  category: string;
+  priceRange: string;
+  rating: number;
+  location: string;
+}
+
+export interface Booking {
+  id: string;
+  serviceId: string;
+  serviceName: string;
+  providerName: string;
+  date: string;
+  time: string;
+  status: 'pending' | 'confirmed' | 'completed' | 'cancelled';
+  price: number;
+  image: string;
+  location: string;
+}
+
+export interface State {
+  name: string;
+  cities: string[];
+}
