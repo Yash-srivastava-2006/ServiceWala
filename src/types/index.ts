@@ -46,9 +46,11 @@ export interface AuthContextType {
   user: User | null;
   login: (email: string, password: string) => Promise<void>;
   signup: (name: string, email: string, password: string, role: 'client' | 'provider') => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void> | void;
   updateProfile: (updates: Partial<User>) => void;
   isLoading: boolean;
+  useFirebase?: boolean;
+  toggleAuthMode?: () => void;
 }
 
 export interface FilterOptions {

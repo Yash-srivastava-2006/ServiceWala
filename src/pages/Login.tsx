@@ -8,7 +8,7 @@ const Login: React.FC = () => {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
-  const { login, isLoading } = useAuth();
+  const { login, isLoading, useFirebase, toggleAuthMode } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -18,8 +18,31 @@ const Login: React.FC = () => {
     try {
       await login(email, password);
       navigate('/');
-    } catch (err) {
-      setError('Invalid email or password');
+    } catch (err: any) {
+      // Handle Firebase-specific error codes
+      if (err.code) {
+        switch (err.code) {
+          case 'auth/user-not-found':
+            setError('No account found with this email address');
+            break;
+          case 'auth/wrong-password':
+            setError('Incorrect password');
+            break;
+          case 'auth/invalid-email':
+            setError('Invalid email address');
+            break;
+          case 'auth/user-disabled':
+            setError('This account has been disabled');
+            break;
+          case 'auth/too-many-requests':
+            setError('Too many failed attempts. Please try again later');
+            break;
+          default:
+            setError('Login failed. Please try again');
+        }
+      } else {
+        setError('Invalid email or password');
+      }
     }
   };
 
@@ -140,15 +163,48 @@ const Login: React.FC = () => {
                 <div className="w-full border-t border-gray-300" />
               </div>
               <div className="relative flex justify-center text-sm">
-                <span className="px-2 bg-white text-gray-500">Demo Credentials</span>
+                <span className="px-2 bg-white text-gray-500">Authentication Mode</span>
               </div>
             </div>
 
-            <div className="mt-4 text-sm text-gray-600 bg-gray-50 p-4 rounded-md">
-              <p className="font-medium mb-2">Use these credentials to test:</p>
-              <p><strong>Email:</strong> demo@example.com</p>
-              <p><strong>Password:</strong> password123</p>
+            <div className="mt-4 flex items-center justify-center">
+              <button
+                type="button"
+                onClick={toggleAuthMode}
+                className="text-sm text-blue-600 hover:text-blue-500 font-medium"
+              >
+                {useFirebase ? 'Switch to Demo Mode' : 'Switch to Firebase Auth'}
+              </button>
             </div>
+
+            {!useFirebase && (
+              <>
+                <div className="relative mt-4">
+                  <div className="absolute inset-0 flex items-center">
+                    <div className="w-full border-t border-gray-300" />
+                  </div>
+                  <div className="relative flex justify-center text-sm">
+                    <span className="px-2 bg-white text-gray-500">Demo Credentials</span>
+                  </div>
+                </div>
+
+                <div className="mt-4 text-sm text-gray-600 bg-gray-50 p-4 rounded-md">
+                  <p className="font-medium mb-2">Use these credentials to test:</p>
+                  <p><strong>Email:</strong> demo@example.com</p>
+                  <p><strong>Password:</strong> password123</p>
+                </div>
+              </>
+            )}
+
+            {useFirebase && (
+              <div className="mt-4 text-sm text-gray-600 bg-blue-50 p-4 rounded-md">
+                <p className="font-medium mb-2">Firebase Authentication:</p>
+                <p>Create an account or use your existing Firebase credentials</p>
+                <p className="text-xs mt-2 text-gray-500">
+                  Make sure to configure your Firebase project settings
+                </p>
+              </div>
+            )}
           </div>
         </div>
       </div>

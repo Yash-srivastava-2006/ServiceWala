@@ -14,7 +14,7 @@ const Signup: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState('');
-  const { signup, isLoading } = useAuth();
+  const { signup, isLoading, useFirebase, toggleAuthMode } = useAuth();
   const navigate = useNavigate();
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -39,10 +39,32 @@ const Signup: React.FC = () => {
     }
 
     try {
-      await signup(formData.name, formData.email, formData.password, formData.type);
+      // Map customer to client for consistency with User type
+      const role = formData.type === 'customer' ? 'client' : 'provider';
+      await signup(formData.name, formData.email, formData.password, role);
       navigate('/');
-    } catch (err) {
-      setError('Failed to create account');
+    } catch (err: any) {
+      // Handle Firebase-specific error codes
+      if (err.code) {
+        switch (err.code) {
+          case 'auth/email-already-in-use':
+            setError('An account with this email already exists');
+            break;
+          case 'auth/invalid-email':
+            setError('Invalid email address');
+            break;
+          case 'auth/weak-password':
+            setError('Password is too weak. Please use at least 6 characters');
+            break;
+          case 'auth/operation-not-allowed':
+            setError('Email/password accounts are not enabled');
+            break;
+          default:
+            setError('Failed to create account. Please try again');
+        }
+      } else {
+        setError('Failed to create account');
+      }
     }
   };
 
@@ -220,6 +242,45 @@ const Signup: React.FC = () => {
 
           <div className="mt-6">
             <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-gray-300" />
+              </div>
+              <div className="relative flex justify-center text-sm">
+                <span className="px-2 bg-white text-gray-500">Authentication Mode</span>
+              </div>
+            </div>
+
+            <div className="mt-4 flex items-center justify-center">
+              <button
+                type="button"
+                onClick={toggleAuthMode}
+                className="text-sm text-blue-600 hover:text-blue-500 font-medium"
+              >
+                {useFirebase ? 'Switch to Demo Mode' : 'Switch to Firebase Auth'}
+              </button>
+            </div>
+
+            {useFirebase && (
+              <div className="mt-4 text-sm text-gray-600 bg-blue-50 p-4 rounded-lg">
+                <p className="font-medium mb-2">Firebase Authentication:</p>
+                <p>Your account will be created with Firebase Authentication</p>
+                <p className="text-xs mt-2 text-gray-500">
+                  Secure, reliable authentication backed by Google
+                </p>
+              </div>
+            )}
+
+            {!useFirebase && (
+              <div className="mt-4 text-sm text-gray-600 bg-gray-50 p-4 rounded-lg">
+                <p className="font-medium mb-2">Demo Mode:</p>
+                <p>Account will be created locally for testing purposes</p>
+                <p className="text-xs mt-2 text-gray-500">
+                  Switch to Firebase for production use
+                </p>
+              </div>
+            )}
+
+            <div className="relative mt-4">
               <div className="absolute inset-0 flex items-center">
                 <div className="w-full border-t border-gray-300" />
               </div>
