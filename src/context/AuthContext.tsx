@@ -4,9 +4,10 @@ import {
   createUserWithEmailAndPassword, 
   signOut, 
   onAuthStateChanged,
+  signInWithPopup,
   User as FirebaseUser 
 } from 'firebase/auth';
-import { auth } from '../config/firebase';
+import { auth, googleProvider } from '../config/firebase';
 import { AuthContextType, User } from '../types';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -97,6 +98,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const loginWithGoogle = async () => {
+    if (!useFirebase) {
+      throw new Error('Google authentication is only available in Firebase mode');
+    }
+    
+    setIsLoading(true);
+    try {
+      await signInWithPopup(auth, googleProvider);
+      // User state will be updated automatically by onAuthStateChanged
+    } catch (error) {
+      setIsLoading(false);
+      throw error;
+    }
+  };
+
   const signup = async (name: string, email: string, password: string, role: 'client' | 'provider') => {
     setIsLoading(true);
     try {
@@ -160,6 +176,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const value: AuthContextType = {
     user,
     login,
+    loginWithGoogle,
     signup,
     logout,
     updateProfile,

@@ -45,6 +45,7 @@ export interface User {
 export interface AuthContextType {
   user: User | null;
   login: (email: string, password: string) => Promise<void>;
+  loginWithGoogle: () => Promise<void>;
   signup: (name: string, email: string, password: string, role: 'client' | 'provider') => Promise<void>;
   logout: () => Promise<void> | void;
   updateProfile: (updates: Partial<User>) => void;
