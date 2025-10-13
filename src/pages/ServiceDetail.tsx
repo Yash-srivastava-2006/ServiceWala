@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Star, MapPin, Clock, Calendar, MessageCircle, Shield, Verified, ArrowLeft } from 'lucide-react';
+import { Star, MapPin, MessageCircle, Shield, Verified, ArrowLeft } from 'lucide-react';
 import { mockServices as services } from '../data/mockData';
 import { useAuth } from '../context/AuthContext';
 
