@@ -13,7 +13,7 @@ const ServiceDetail: React.FC = () => {
   const [message, setMessage] = useState('');
   const [showBookingForm, setShowBookingForm] = useState(false);
 
-  const service = services.find(s => s.id === id);
+  const service = services.find(s => s.id === Number(id));
 
   if (!service) {
     return (
@@ -46,10 +46,8 @@ const ServiceDetail: React.FC = () => {
   };
 
   const formatPrice = () => {
-    if (service.priceType === 'hour') {
+    if (service.priceType === 'hourly') {
       return `₹${service.price}/hr`;
-    } else if (service.priceType === 'day') {
-      return `₹${service.price}/day`;
     } else {
       return `₹${service.price}`;
     }

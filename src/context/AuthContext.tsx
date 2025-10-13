@@ -9,6 +9,7 @@ import {
 } from 'firebase/auth';
 import { auth, googleProvider } from '../config/firebase';
 import { AuthContextType, User } from '../types';
+import { userService } from '../services/database';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -36,22 +37,47 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     // Firebase auth state listener
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser: FirebaseUser | null) => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: FirebaseUser | null) => {
       if (firebaseUser) {
-        // Convert Firebase user to our User type
-        const appUser: User = {
+        // Always create fallback user from Firebase data
+        const fallbackUser: User = {
           id: firebaseUser.uid,
+          firebase_uid: firebaseUser.uid,
           name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
           email: firebaseUser.email || '',
-          role: 'client', // Default role, you might want to store this in Firestore
+          role: 'client',
           avatar: firebaseUser.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(firebaseUser.displayName || 'User')}&background=3b82f6&color=fff`,
           phone: firebaseUser.phoneNumber || '',
-          location: '',
-          joinedDate: firebaseUser.metadata.creationTime || new Date().toISOString(),
-          verified: firebaseUser.emailVerified
+          verified: firebaseUser.emailVerified,
+          joinedDate: firebaseUser.metadata.creationTime || new Date().toISOString()
         };
-        setUser(appUser);
-        localStorage.setItem('user', JSON.stringify(appUser));
+
+        // Set user immediately from Firebase data
+        setUser(fallbackUser);
+        localStorage.setItem('user', JSON.stringify(fallbackUser));
+
+        // Try to sync with Supabase in the background (optional)
+        try {
+          const supabaseUser = await userService.upsertUser({
+            firebase_uid: firebaseUser.uid,
+            name: fallbackUser.name,
+            email: fallbackUser.email,
+            role: 'client',
+            avatar: fallbackUser.avatar,
+            phone: fallbackUser.phone,
+            verified: firebaseUser.emailVerified,
+            joinedDate: firebaseUser.metadata.creationTime || new Date().toISOString()
+          });
+
+          // If Supabase sync succeeds, update user data
+          if (supabaseUser) {
+            setUser(supabaseUser);
+            localStorage.setItem('user', JSON.stringify(supabaseUser));
+          }
+        } catch (error) {
+          console.warn('Supabase sync failed, using Firebase data only:', error);
+          // Continue with Firebase data - don't throw error
+        }
       } else {
         setUser(null);
         localStorage.removeItem('user');
@@ -118,9 +144,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       if (useFirebase) {
         // Firebase authentication
-        await createUserWithEmailAndPassword(auth, email, password);
-        // You might want to update the user's display name
-        // await updateProfile(userCredential.user, { displayName: name });
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        
+        // Try to sync with Supabase with the role (optional)
+        try {
+          await userService.upsertUser({
+            firebase_uid: userCredential.user.uid,
+            name: name,
+            email: email,
+            role: role,
+            verified: false
+          });
+        } catch (error) {
+          console.warn('Supabase sync during signup failed:', error);
+          // Continue with Firebase auth - don't fail the signup
+        }
+        
         // User state will be updated automatically by onAuthStateChanged
       } else {
         // Mock authentication (existing logic)
@@ -158,11 +197,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const updateProfile = (updates: Partial<User>) => {
+  const updateProfile = async (updates: Partial<User>) => {
     if (user) {
-      const updatedUser = { ...user, ...updates };
-      setUser(updatedUser);
-      localStorage.setItem('user', JSON.stringify(updatedUser));
+      try {
+        if (useFirebase && user.firebase_uid) {
+          // Update in Supabase
+          const updatedUser = await userService.updateUser(user.id, updates);
+          if (updatedUser) {
+            setUser(updatedUser);
+            localStorage.setItem('user', JSON.stringify(updatedUser));
+          }
+        } else {
+          // Mock mode - update locally
+          const updatedUser = { ...user, ...updates };
+          setUser(updatedUser);
+          localStorage.setItem('user', JSON.stringify(updatedUser));
+        }
+      } catch (error) {
+        console.error('Error updating profile:', error);
+        // Fallback to local update if Supabase fails
+        const updatedUser = { ...user, ...updates };
+        setUser(updatedUser);
+        localStorage.setItem('user', JSON.stringify(updatedUser));
+      }
     }
   };
 

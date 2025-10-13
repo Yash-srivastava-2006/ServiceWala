@@ -1,7 +1,7 @@
-import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { LocationProvider } from './context/LocationContext';
+import { DataProvider } from './context/DataContext';
 import Navbar from './components/Navbar';
 import Home from './pages/Home';
 import Services from './pages/Services';
@@ -16,24 +16,26 @@ import Settings from './pages/Settings';
 function App() {
   return (
     <AuthProvider>
-      <LocationProvider>
-        <Router>
-          <div className="min-h-screen bg-gray-50">
-            <Navbar />
-            <Routes>
-              <Route path="/" element={<Home />} />
-              <Route path="/services" element={<Services />} />
-              <Route path="/service/:id" element={<ServiceDetail />} />
-              <Route path="/login" element={<Login />} />
-              <Route path="/signup" element={<Signup />} />
-              <Route path="/how-it-works" element={<HowItWorks />} />
-              <Route path="/profile" element={<Profile />} />
-              <Route path="/bookings" element={<Bookings />} />
-              <Route path="/settings" element={<Settings />} />
-            </Routes>
-          </div>
-        </Router>
-      </LocationProvider>
+      <DataProvider>
+        <LocationProvider>
+          <Router>
+            <div className="min-h-screen bg-gray-50">
+              <Navbar />
+              <Routes>
+                <Route path="/" element={<Home />} />
+                <Route path="/services" element={<Services />} />
+                <Route path="/service/:id" element={<ServiceDetail />} />
+                <Route path="/login" element={<Login />} />
+                <Route path="/signup" element={<Signup />} />
+                <Route path="/how-it-works" element={<HowItWorks />} />
+                <Route path="/profile" element={<Profile />} />
+                <Route path="/bookings" element={<Bookings />} />
+                <Route path="/settings" element={<Settings />} />
+              </Routes>
+            </div>
+          </Router>
+        </LocationProvider>
+      </DataProvider>
     </AuthProvider>
   );
 }
