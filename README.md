@@ -151,17 +151,7 @@ src/
 - `npm run preview` - Preview production build
 - `npm run lint` - Run ESLint for code quality
 
-## 🌍 Demo Credentials
-
-For testing purposes, you can use these demo credentials:
-
-**Customer Account:**
-- Email: `demo@example.com`
-- Password: `password123`
-
-**Demo Locations:**
-- Try selecting "Delhi" → "New Delhi" to see available services
-- Switch to "Maharashtra" → "Mumbai" to see different services
+<!-- Demo credentials removed: app now uses Firebase Authentication only. -->
 
 ## 🎨 Design Philosophy
 

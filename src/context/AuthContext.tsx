@@ -24,18 +24,9 @@ export const useAuth = () => {
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [useFirebase, setUseFirebase] = useState(true); // Toggle between Firebase and mock auth
+  // Firebase-only authentication (demo/mock mode removed)
 
   useEffect(() => {
-    // Check for stored user session if not using Firebase
-    if (!useFirebase) {
-      const storedUser = localStorage.getItem('user');
-      if (storedUser) {
-        setUser(JSON.parse(storedUser));
-      }
-      return;
-    }
-
     // Firebase auth state listener
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: FirebaseUser | null) => {
       if (firebaseUser) {
@@ -68,7 +59,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             verified: firebaseUser.emailVerified,
             joinedDate: firebaseUser.metadata.creationTime || new Date().toISOString()
           });
-
+          
           // If Supabase sync succeeds, update user data
           if (supabaseUser) {
             setUser(supabaseUser);
@@ -86,38 +77,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     return () => unsubscribe();
-  }, [useFirebase]);
+  }, []);
 
-  const login = async (email: string, password: string) => {
+  const login = async (email: string, password: string, role?: 'client' | 'provider') => {
     setIsLoading(true);
     try {
-      if (useFirebase) {
-        // Firebase authentication
-        await signInWithEmailAndPassword(auth, email, password);
-        // User state will be updated automatically by onAuthStateChanged
-        // Don't set loading to false here - let onAuthStateChanged handle it
-      } else {
-        // Mock authentication (existing logic)
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        const name = email.split('@')[0].replace(/[._]/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-        
-        const mockUser: User = {
-          id: '1',
-          name: name,
-          email,
-          role: 'client',
-          avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=3b82f6&color=fff`,
-          phone: '+1 (555) 123-4567',
-          location: 'New York, NY',
-          joinedDate: '2023-01-15',
-          verified: true
-        };
-        
-        setUser(mockUser);
-        localStorage.setItem('user', JSON.stringify(mockUser));
-        setIsLoading(false);
+      // Firebase authentication
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      
+      // If role is provided, update user data with the role
+      if (role && userCredential.user) {
+        try {
+          await userService.upsertUser({
+            firebase_uid: userCredential.user.uid,
+            name: userCredential.user.displayName || userCredential.user.email?.split('@')[0] || 'User',
+            email: userCredential.user.email || '',
+            role: role, // Update role based on login selection
+            verified: userCredential.user.emailVerified
+          });
+        } catch (error) {
+          console.warn('Supabase role sync during login failed:', error);
+          // Continue with Firebase auth - don't fail the login
+        }
       }
+      
+      // User state will be updated automatically by onAuthStateChanged
+      // Don't set loading to false here - let onAuthStateChanged handle it
     } catch (error) {
       setIsLoading(false); // Always reset loading state on error
       throw error; // Re-throw the original error to preserve Firebase error codes
@@ -125,10 +110,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const loginWithGoogle = async () => {
-    if (!useFirebase) {
-      throw new Error('Google authentication is only available in Firebase mode');
-    }
-    
+    // Google Sign-In via Firebase
     setIsLoading(true);
     try {
       await signInWithPopup(auth, googleProvider);
@@ -142,45 +124,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signup = async (name: string, email: string, password: string, role: 'client' | 'provider') => {
     setIsLoading(true);
     try {
-      if (useFirebase) {
-        // Firebase authentication
-        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-        
-        // Try to sync with Supabase with the role (optional)
-        try {
-          await userService.upsertUser({
-            firebase_uid: userCredential.user.uid,
-            name: name,
-            email: email,
-            role: role,
-            verified: false
-          });
-        } catch (error) {
-          console.warn('Supabase sync during signup failed:', error);
-          // Continue with Firebase auth - don't fail the signup
-        }
-        
-        // User state will be updated automatically by onAuthStateChanged
-      } else {
-        // Mock authentication (existing logic)
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        const mockUser: User = {
-          id: Date.now().toString(),
-          name,
-          email,
-          role,
-          avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=3b82f6&color=fff`,
-          phone: '',
-          location: '',
-          joinedDate: new Date().toISOString().split('T')[0],
+      // Firebase authentication
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+
+      // Always sync with Supabase with the specified role
+      try {
+        await userService.upsertUser({
+          firebase_uid: userCredential.user.uid,
+          name: name,
+          email: email,
+          role: role, // Always use the role provided during signup
           verified: false
-        };
-        
-        setUser(mockUser);
-        localStorage.setItem('user', JSON.stringify(mockUser));
-        setIsLoading(false);
+        });
+      } catch (error) {
+        console.warn('Supabase sync during signup failed:', error);
+        // Continue with Firebase auth - don't fail the signup
       }
+
+      // User state will be updated automatically by onAuthStateChanged
     } catch (error) {
       setIsLoading(false); // Always reset loading state on error
       throw error; // Re-throw the original error to preserve Firebase error codes
@@ -188,19 +149,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = async () => {
-    if (useFirebase) {
-      await signOut(auth);
-      // User state will be updated automatically by onAuthStateChanged
-    } else {
-      setUser(null);
-      localStorage.removeItem('user');
-    }
+    await signOut(auth);
+    // User state will be updated automatically by onAuthStateChanged
   };
 
   const updateProfile = async (updates: Partial<User>) => {
     if (user) {
       try {
-        if (useFirebase && user.firebase_uid) {
+        if (user.firebase_uid) {
           // Update in Supabase
           const updatedUser = await userService.updateUser(user.id, updates);
           if (updatedUser) {
@@ -208,7 +164,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             localStorage.setItem('user', JSON.stringify(updatedUser));
           }
         } else {
-          // Mock mode - update locally
+          // Local user object - update locally
           const updatedUser = { ...user, ...updates };
           setUser(updatedUser);
           localStorage.setItem('user', JSON.stringify(updatedUser));
@@ -223,13 +179,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const toggleAuthMode = () => {
-    setUseFirebase(!useFirebase);
-    // Clear current user when switching modes
-    setUser(null);
-    localStorage.removeItem('user');
-  };
-
   const value: AuthContextType = {
     user,
     login,
@@ -238,8 +187,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     logout,
     updateProfile,
     isLoading,
-    useFirebase,
-    toggleAuthMode
+    // Firebase-only: demo mode removed
   };
 
   return (

@@ -6,33 +6,39 @@ export const userService = {
   // Create or update user in Supabase when they sign up/login with Firebase
   async upsertUser(userData: Partial<User>): Promise<User | null> {
     try {
+      const insertData = {
+        firebase_uid: userData.firebase_uid,
+        name: userData.name,
+        email: userData.email,
+        avatar: userData.avatar,
+        role: userData.role || 'client', // Default to 'client' if no role specified
+        phone: userData.phone,
+        location: userData.location,
+        city: userData.city,
+        state: userData.state,
+        verified: userData.verified || false,
+        bio: userData.bio,
+        experience_years: userData.experienceYears || 0,
+        specialties: userData.specialties || [],
+        skills: userData.skills || [],
+        completed_jobs: userData.completedJobs || 0,
+        rating: userData.rating || 0.0,
+        updated_at: new Date().toISOString()
+      };
+      
       const { data, error } = await (supabase
         .from(TABLES.USERS) as any)
-        .upsert([{
-          firebase_uid: userData.firebase_uid,
-          name: userData.name,
-          email: userData.email,
-          avatar: userData.avatar,
-          role: userData.role || 'client',
-          phone: userData.phone,
-          location: userData.location,
-          city: userData.city,
-          state: userData.state,
-          verified: userData.verified || false,
-          bio: userData.bio,
-          experience_years: userData.experienceYears || 0,
-          specialties: userData.specialties || [],
-          skills: userData.skills || [],
-          completed_jobs: userData.completedJobs || 0,
-          rating: userData.rating || 0.0,
-          updated_at: new Date().toISOString()
-        }], {
+        .upsert([insertData], {
           onConflict: 'firebase_uid'
         })
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Supabase upsert error:', error);
+        throw error;
+      }
+      
       return this.transformUserFromDB(data);
     } catch (error) {
       console.error('Error upserting user:', error);
@@ -81,6 +87,40 @@ export const userService = {
     } catch (error) {
       console.error('Error updating user:', error);
       return null;
+    }
+  },
+
+  // Get all service providers
+  async getServiceProviders(): Promise<User[]> {
+    try {
+      const { data, error } = await supabase
+        .from(TABLES.USERS)
+        .select('*')
+        .eq('role', 'provider')
+        .order('rating', { ascending: false });
+
+      if (error) throw error;
+      return data.map(this.transformUserFromDB);
+    } catch (error) {
+      console.error('Error getting service providers:', error);
+      return [];
+    }
+  },
+
+  // Get all clients
+  async getClients(): Promise<User[]> {
+    try {
+      const { data, error } = await supabase
+        .from(TABLES.USERS)
+        .select('*')
+        .eq('role', 'client')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      return data.map(this.transformUserFromDB);
+    } catch (error) {
+      console.error('Error getting clients:', error);
+      return [];
     }
   },
 

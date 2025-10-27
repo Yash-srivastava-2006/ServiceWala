@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Service, Category, Booking, Review, FilterOptions } from '../types';
-import { serviceService, categoryService, bookingService, reviewService } from '../services/database';
+import { serviceService, categoryService, bookingService, reviewService, userService } from '../services/database';
 import { useAuth } from './AuthContext';
 
 interface DataContextType {
@@ -57,12 +57,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Load user bookings when user changes
   useEffect(() => {
-    if (user?.id) {
+    if (user?.firebase_uid) {
       loadUserBookings();
     } else {
       setUserBookings([]);
     }
-  }, [user?.id]);
+  }, [user?.firebase_uid]);
 
   // Filter services when services or filters change
   useEffect(() => {
@@ -91,14 +91,24 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const loadUserBookings = async () => {
-    if (!user?.id) return;
+    if (!user?.firebase_uid) return;
     
     setIsLoadingBookings(true);
     try {
-      const bookingsData = await bookingService.getUserBookings(user.id);
-      setUserBookings(bookingsData);
+      console.log('Loading bookings for user with firebase_uid:', user.firebase_uid);
+      // First get the user's database ID from their firebase_uid
+      const dbUser = await userService.getUserByFirebaseUid(user.firebase_uid);
+      if (dbUser?.id) {
+        console.log('Found database user ID:', dbUser.id);
+        const bookingsData = await bookingService.getUserBookings(dbUser.id);
+        setUserBookings(bookingsData);
+      } else {
+        console.warn('No database user found for firebase_uid:', user.firebase_uid);
+        setUserBookings([]);
+      }
     } catch (error) {
       console.error('Error loading user bookings:', error);
+      setUserBookings([]);
     } finally {
       setIsLoadingBookings(false);
     }

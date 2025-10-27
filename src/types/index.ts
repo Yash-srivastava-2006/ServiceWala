@@ -36,7 +36,7 @@ export interface User {
   name: string;
   email: string;
   avatar?: string;
-  role: 'client' | 'provider';
+  role: 'client' | 'provider'; // client = customer, provider = service provider
   phone?: string;
   location?: string;
   city?: string;
@@ -54,14 +54,13 @@ export interface User {
 
 export interface AuthContextType {
   user: User | null;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string, role?: 'client' | 'provider') => Promise<void>;
   loginWithGoogle: () => Promise<void>;
   signup: (name: string, email: string, password: string, role: 'client' | 'provider') => Promise<void>;
   logout: () => Promise<void> | void;
   updateProfile: (updates: Partial<User>) => Promise<void>;
   isLoading: boolean;
-  useFirebase?: boolean;
-  toggleAuthMode?: () => void;
+  // Authentication is Firebase-only in production builds
 }
 
 export interface FilterOptions {

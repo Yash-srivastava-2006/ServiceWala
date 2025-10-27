@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Eye, EyeOff, Mail, Lock, Briefcase } from 'lucide-react';
+import { Eye, EyeOff, Mail, Lock, Briefcase, User, UserCheck } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 const Login: React.FC = () => {
@@ -8,7 +8,8 @@ const Login: React.FC = () => {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
-  const { login, loginWithGoogle, isLoading, useFirebase, toggleAuthMode } = useAuth();
+  const [userType, setUserType] = useState<'customer' | 'provider'>('customer');
+  const { login, loginWithGoogle, isLoading } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -16,7 +17,9 @@ const Login: React.FC = () => {
     setError('');
 
     try {
-      await login(email, password);
+      // Map customer to client for consistency with User type
+      const role = userType === 'customer' ? 'client' : 'provider';
+      await login(email, password, role);
       navigate('/');
     } catch (err: any) {
       // Handle Firebase-specific error codes
@@ -47,11 +50,6 @@ const Login: React.FC = () => {
   };
 
   const handleGoogleSignIn = async () => {
-    if (!useFirebase) {
-      setError('Google Sign-In is only available in Firebase mode');
-      return;
-    }
-
     setError('');
     try {
       await loginWithGoogle();
@@ -105,6 +103,41 @@ const Login: React.FC = () => {
                 {error}
               </div>
             )}
+
+            {/* User Type Selection */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-3">
+                I am signing in as:
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setUserType('customer')}
+                  className={`p-3 border-2 rounded-lg text-center transition-colors ${
+                    userType === 'customer'
+                      ? 'border-blue-500 bg-blue-50 text-blue-700'
+                      : 'border-gray-200 hover:border-gray-300'
+                  }`}
+                >
+                  <User className="w-5 h-5 mx-auto mb-1" />
+                  <div className="text-sm font-medium">Customer</div>
+                  <div className="text-xs text-gray-500">Book services</div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setUserType('provider')}
+                  className={`p-3 border-2 rounded-lg text-center transition-colors ${
+                    userType === 'provider'
+                      ? 'border-blue-500 bg-blue-50 text-blue-700'
+                      : 'border-gray-200 hover:border-gray-300'
+                  }`}
+                >
+                  <UserCheck className="w-5 h-5 mx-auto mb-1" />
+                  <div className="text-sm font-medium">Service Provider</div>
+                  <div className="text-xs text-gray-500">Offer services</div>
+                </button>
+              </div>
+            </div>
 
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-gray-700">
@@ -187,7 +220,6 @@ const Login: React.FC = () => {
               </button>
             </div>
 
-            {useFirebase && (
               <div>
                 <div className="relative">
                   <div className="absolute inset-0 flex items-center">
@@ -225,58 +257,7 @@ const Login: React.FC = () => {
                   {isLoading ? 'Signing in...' : 'Continue with Google'}
                 </button>
               </div>
-            )}
           </form>
-
-          <div className="mt-6">
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-300" />
-              </div>
-              <div className="relative flex justify-center text-sm">
-                <span className="px-2 bg-white text-gray-500">Authentication Mode</span>
-              </div>
-            </div>
-
-            <div className="mt-4 flex items-center justify-center">
-              <button
-                type="button"
-                onClick={toggleAuthMode}
-                className="text-sm text-blue-600 hover:text-blue-500 font-medium"
-              >
-                {useFirebase ? 'Switch to Demo Mode' : 'Switch to Firebase Auth'}
-              </button>
-            </div>
-
-            {!useFirebase && (
-              <>
-                <div className="relative mt-4">
-                  <div className="absolute inset-0 flex items-center">
-                    <div className="w-full border-t border-gray-300" />
-                  </div>
-                  <div className="relative flex justify-center text-sm">
-                    <span className="px-2 bg-white text-gray-500">Demo Credentials</span>
-                  </div>
-                </div>
-
-                <div className="mt-4 text-sm text-gray-600 bg-gray-50 p-4 rounded-md">
-                  <p className="font-medium mb-2">Use these credentials to test:</p>
-                  <p><strong>Email:</strong> demo@example.com</p>
-                  <p><strong>Password:</strong> password123</p>
-                </div>
-              </>
-            )}
-
-            {useFirebase && (
-              <div className="mt-4 text-sm text-gray-600 bg-blue-50 p-4 rounded-md">
-                <p className="font-medium mb-2">Firebase Authentication:</p>
-                <p>Create an account or use your existing Firebase credentials</p>
-                <p className="text-xs mt-2 text-gray-500">
-                  Make sure to configure your Firebase project settings
-                </p>
-              </div>
-            )}
-          </div>
         </div>
       </div>
     </div>
