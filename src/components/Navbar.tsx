@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useLocation as useRouterLocation } from 'react-router-dom';
-import { Menu, X, User, LogOut, Briefcase, Settings, Calendar, UserCircle } from 'lucide-react';
+import { Menu, X, LogOut, Briefcase, Settings, Calendar, UserCircle, BarChart3 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useLocation } from '../context/LocationContext';
 import LocationSelector from './LocationSelector';
@@ -22,7 +22,10 @@ const Navbar: React.FC = () => {
 
   const userMenuItems = [
     { path: '/profile', label: 'Profile', icon: UserCircle },
-    { path: '/bookings', label: 'My Bookings', icon: Calendar },
+    ...(user?.role === 'provider' 
+      ? [{ path: '/provider-dashboard', label: 'Dashboard', icon: BarChart3 }]
+      : [{ path: '/bookings', label: 'My Bookings', icon: Calendar }]
+    ),
     { path: '/settings', label: 'Settings', icon: Settings }
   ];
 

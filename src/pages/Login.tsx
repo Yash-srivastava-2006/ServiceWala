@@ -20,7 +20,13 @@ const Login: React.FC = () => {
       // Map customer to client for consistency with User type
       const role = userType === 'customer' ? 'client' : 'provider';
       await login(email, password, role);
-      navigate('/');
+      
+      // Redirect based on user role
+      if (role === 'provider') {
+        navigate('/provider-dashboard');
+      } else {
+        navigate('/');
+      }
     } catch (err: any) {
       // Handle Firebase-specific error codes
       if (err.code) {
@@ -53,6 +59,7 @@ const Login: React.FC = () => {
     setError('');
     try {
       await loginWithGoogle();
+      // Google Sign-in users default to customer role, redirect to home
       navigate('/');
     } catch (err: any) {
       if (err.code) {

@@ -1,5 +1,6 @@
 import { supabase, TABLES } from '../config/supabase';
 import { User, Service, Booking, Review, Category } from '../types';
+import { mockCategories } from '../data/mockData';
 
 // User Services
 export const userService = {
@@ -153,14 +154,22 @@ export const userService = {
 export const categoryService = {
   async getAllCategories(): Promise<Category[]> {
     try {
+      console.log('Fetching categories from Supabase...');
       const { data, error } = await supabase
         .from(TABLES.CATEGORIES)
         .select('*')
         .eq('is_active', true)
         .order('name');
 
-      if (error) throw error;
-      return data.map(this.transformCategoryFromDB);
+      if (error) {
+        console.error('Supabase categories error:', error);
+        throw error;
+      }
+      
+      console.log('Raw categories data from Supabase:', data);
+      const transformedCategories = data.map(this.transformCategoryFromDB);
+      console.log('Transformed categories:', transformedCategories);
+      return transformedCategories;
     } catch (error) {
       console.error('Error getting categories:', error);
       return [];
@@ -187,19 +196,15 @@ export const serviceService = {
     query?: string;
   }): Promise<Service[]> {
     try {
+      console.log('Getting all services with filters:', filters);
+      
+      // Simplified query without foreign key joins to avoid constraint issues
       let query = supabase
         .from(TABLES.SERVICES)
-        .select(`
-          *,
-          provider:users!services_provider_id_fkey(*),
-          category:categories!services_category_id_fkey(*)
-        `)
+        .select('*')
         .eq('is_active', true);
 
       // Apply filters
-      if (filters?.category) {
-        query = query.eq('categories.name', filters.category);
-      }
       if (filters?.city) {
         query = query.eq('city', filters.city);
       }
@@ -212,8 +217,49 @@ export const serviceService = {
 
       const { data, error } = await query.order('created_at', { ascending: false });
 
-      if (error) throw error;
-      return data.map(this.transformServiceFromDB);
+      if (error) {
+        console.error('Error in getAllServices:', error);
+        throw error;
+      }
+      
+      console.log('Found services:', data?.length || 0);
+      
+      if (!data || data.length === 0) {
+        return [];
+      }
+
+      // Transform manually without joins for now
+      return data.map((service: any) => ({
+        id: service.service_id,
+        title: service.title,
+        description: service.description,
+        price: Number(service.price),
+        priceType: service.price_type,
+        duration: service.duration,
+        category: 'General', // We'll get category separately if needed
+        rating: Number(service.rating),
+        reviewCount: service.review_count,
+        images: service.images || [],
+        providerId: service.provider_id,
+        availability: service.availability || [],
+        location: service.location,
+        state: service.state,
+        city: service.city,
+        tags: service.tags || [],
+        provider: {
+          id: service.provider_id,
+          name: 'Provider',
+          rating: 0,
+          completedJobs: 0,
+          bio: '',
+          yearsExperience: 0,
+          verified: false,
+          specialties: [],
+          reviewCount: 0,
+          avatar: '',
+          location: ''
+        }
+      }));
     } catch (error) {
       console.error('Error getting services:', error);
       return [];
@@ -242,22 +288,285 @@ export const serviceService = {
 
   async getServicesByProvider(providerId: string): Promise<Service[]> {
     try {
+      console.log('Getting services for provider:', providerId);
+      
+      // First, try a simple query without joins to avoid foreign key issues
       const { data, error } = await supabase
         .from(TABLES.SERVICES)
-        .select(`
-          *,
-          provider:users!services_provider_id_fkey(*),
-          category:categories!services_category_id_fkey(*)
-        `)
+        .select('*')
         .eq('provider_id', providerId)
         .eq('is_active', true)
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
-      return data.map(this.transformServiceFromDB);
+      if (error) {
+        console.error('Error in getServicesByProvider:', error);
+        throw error;
+      }
+      
+      console.log('Found services for provider:', data?.length || 0);
+      
+      if (!data || data.length === 0) {
+        return [];
+      }
+
+      // Transform the data manually without foreign key joins for now
+      return data.map((service: any) => ({
+        id: service.service_id,
+        title: service.title,
+        description: service.description,
+        price: Number(service.price),
+        priceType: service.price_type,
+        duration: service.duration,
+        category: 'General', // We'll get this separately if needed
+        rating: Number(service.rating),
+        reviewCount: service.review_count,
+        images: service.images || [],
+        providerId: service.provider_id,
+        availability: service.availability || [],
+        location: service.location,
+        state: service.state,
+        city: service.city,
+        tags: service.tags || [],
+        provider: {
+          id: providerId,
+          name: 'Provider', // We'll get this separately if needed
+          rating: 0,
+          completedJobs: 0,
+          bio: '',
+          yearsExperience: 0,
+          verified: false,
+          specialties: [],
+          reviewCount: 0,
+          avatar: '',
+          location: ''
+        }
+      }));
     } catch (error) {
       console.error('Error getting provider services:', error);
       return [];
+    }
+  },
+
+  async createService(serviceData: {
+    providerId: string;
+    categoryId: string;
+    title: string;
+    description: string;
+    price: number;
+    priceType: 'fixed' | 'hourly';
+    duration: string;
+    location: string;
+    city: string;
+    state: string;
+    images?: string[];
+    availability?: string[];
+    tags?: string[];
+  }): Promise<Service | null> {
+    try {
+      console.log('Creating service with data:', serviceData);
+      
+      // First, ensure the provider exists and get their database ID
+      // The providerId could be either firebase_uid or database user_id
+      let provider = await userService.getUserByFirebaseUid(serviceData.providerId);
+      
+      // If not found by firebase_uid, it might already be a database user_id
+      if (!provider) {
+        console.log('Provider not found by Firebase UID, checking if it\'s a database ID...');
+        // Try to get user data directly by user_id
+        const { data: userData, error: userError } = await supabase
+          .from(TABLES.USERS)
+          .select('*')
+          .eq('user_id', serviceData.providerId)
+          .single();
+        
+        if (!userError && userData) {
+          provider = userService.transformUserFromDB(userData);
+          console.log('Provider found by database ID:', provider);
+        }
+      }
+      
+      if (!provider) {
+        console.error(`Provider not found in database. Searched for ID: ${serviceData.providerId}`);
+        console.log('Attempting to create/upsert the provider...');
+        
+        // Get current user from AuthContext to create the provider record
+        // This is a fallback - the user should have been created during authentication
+        try {
+          const { data: { user: firebaseUser } } = await supabase.auth.getUser();
+          if (firebaseUser) {
+            console.log('Found Firebase user, attempting to create Supabase user record:', firebaseUser.id);
+            
+            const newUserData = {
+              firebase_uid: firebaseUser.id,
+              name: firebaseUser.user_metadata?.name || firebaseUser.email?.split('@')[0] || 'Provider',
+              email: firebaseUser.email || '',
+              role: 'provider' as const,
+              avatar: firebaseUser.user_metadata?.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(firebaseUser.email || 'Provider')}&background=3b82f6&color=fff`,
+              phone: firebaseUser.phone || '',
+              verified: firebaseUser.email_confirmed_at ? true : false
+            };
+            
+            provider = await userService.upsertUser(newUserData);
+            console.log('Created provider:', provider);
+          }
+        } catch (authError) {
+          console.error('Error getting Firebase user:', authError);
+        }
+        
+        if (!provider) {
+          throw new Error(`Provider not found and could not be created. Tried ID: ${serviceData.providerId}`);
+        }
+      }
+      console.log('Provider confirmed:', provider);
+
+      // Handle category - if it's a mock category, create or find a real one
+      let categoryId = serviceData.categoryId;
+      if (serviceData.categoryId.startsWith('mock-')) {
+        // Extract category name from mock categories
+        const mockIndex = parseInt(serviceData.categoryId.replace('mock-', ''));
+        const categoryName = mockCategories[mockIndex]?.name || 'General';
+        
+        console.log('Creating/finding category for:', categoryName);
+        
+        // Try to find existing category or create it
+        const { data: existingCategory, error: findError } = await supabase
+          .from(TABLES.CATEGORIES)
+          .select('category_id')
+          .eq('name', categoryName)
+          .maybeSingle() as { data: { category_id: string } | null; error: any };
+
+        if (!findError && existingCategory) {
+          categoryId = existingCategory.category_id;
+          console.log('Found existing category:', categoryId);
+        } else {
+          // Create the category
+          const { data: newCategory, error: categoryError } = await (supabase
+            .from(TABLES.CATEGORIES) as any)
+            .insert({
+              name: categoryName,
+              description: `${categoryName} services`,
+              icon: mockCategories[mockIndex]?.icon || '🔧',
+              is_active: true
+            })
+            .select('category_id')
+            .single();
+
+          if (categoryError) {
+            console.error('Error creating category:', categoryError);
+            throw new Error(`Failed to create category: ${categoryError.message}`);
+          }
+          
+          categoryId = newCategory.category_id;
+          console.log('Created new category:', categoryId);
+        }
+      }
+
+      const insertData = {
+        provider_id: provider.id, // This should be the database user_id from the provider object
+        category_id: categoryId,
+        title: serviceData.title,
+        description: serviceData.description,
+        price: serviceData.price,
+        price_type: serviceData.priceType,
+        duration: serviceData.duration,
+        location: serviceData.location,
+        city: serviceData.city,
+        state: serviceData.state,
+        images: serviceData.images || [],
+        availability: serviceData.availability || [],
+        tags: serviceData.tags || [],
+        rating: 0.0,
+        review_count: 0,
+        is_active: true
+      };
+
+      console.log('Insert data prepared:', insertData);
+      console.log('Provider ID for foreign key:', provider.id);
+      console.log('Provider object keys:', Object.keys(provider));
+
+      // Verify the provider ID actually exists in the users table
+      const { data: providerCheck, error: providerCheckError } = await supabase
+        .from(TABLES.USERS)
+        .select('user_id, name, role, firebase_uid')
+        .eq('user_id', provider.id)
+        .single();
+
+      if (providerCheckError || !providerCheck) {
+        console.error('Provider verification failed:', providerCheckError);
+        console.error('Provider ID does not exist in users table:', provider.id);
+        throw new Error(`Provider ID ${provider.id} does not exist in users table`);
+      }
+
+      console.log('Provider verification successful:', providerCheck);
+
+      // Verify the category exists
+      const { data: categoryCheck, error: categoryCheckError } = await supabase
+        .from(TABLES.CATEGORIES)
+        .select('category_id, name')
+        .eq('category_id', categoryId)
+        .single();
+
+      if (categoryCheckError || !categoryCheck) {
+        console.error('Category verification failed:', categoryCheckError);
+        console.error('Category ID does not exist:', categoryId);
+        throw new Error(`Category ID ${categoryId} does not exist in categories table`);
+      }
+
+      console.log('Category verification successful:', categoryCheck);
+
+      const { data, error } = await (supabase
+        .from(TABLES.SERVICES) as any)
+        .insert([insertData])
+        .select('*')
+        .single();
+
+      if (error) {
+        console.error('Supabase service creation error:', error);
+        console.error('Error details:', JSON.stringify(error, null, 2));
+        console.error('Insert data that failed:', JSON.stringify(insertData, null, 2));
+        throw error;
+      }
+
+      console.log('Service created successfully:', data);
+      
+      // Transform the data manually since we're not using joins
+      const createdService = {
+        id: (data as any).service_id,
+        title: (data as any).title,
+        description: (data as any).description,
+        price: Number((data as any).price),
+        priceType: (data as any).price_type,
+        duration: (data as any).duration,
+        category: (categoryCheck as any).name,
+        rating: Number((data as any).rating),
+        reviewCount: (data as any).review_count,
+        images: (data as any).images || [],
+        providerId: (data as any).provider_id,
+        availability: (data as any).availability || [],
+        location: (data as any).location,
+        state: (data as any).state,
+        city: (data as any).city,
+        tags: (data as any).tags || [],
+        provider: {
+          id: (providerCheck as any).user_id,
+          name: (providerCheck as any).name,
+          rating: 0,
+          completedJobs: 0,
+          bio: '',
+          yearsExperience: 0,
+          verified: false,
+          specialties: [],
+          reviewCount: 0,
+          avatar: '',
+          location: ''
+        }
+      };
+      
+      return createdService;
+    } catch (error) {
+      console.error('Error creating service:', error);
+      console.error('Error stack:', error instanceof Error ? error.stack : 'Unknown error');
+      throw error; // Re-throw so the UI can show the error
     }
   },
 

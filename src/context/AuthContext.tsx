@@ -30,44 +30,49 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Firebase auth state listener
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: FirebaseUser | null) => {
       if (firebaseUser) {
-        // Always create fallback user from Firebase data
-        const fallbackUser: User = {
-          id: firebaseUser.uid,
-          firebase_uid: firebaseUser.uid,
-          name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
-          email: firebaseUser.email || '',
-          role: 'client',
-          avatar: firebaseUser.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(firebaseUser.displayName || 'User')}&background=3b82f6&color=fff`,
-          phone: firebaseUser.phoneNumber || '',
-          verified: firebaseUser.emailVerified,
-          joinedDate: firebaseUser.metadata.creationTime || new Date().toISOString()
-        };
-
-        // Set user immediately from Firebase data
-        setUser(fallbackUser);
-        localStorage.setItem('user', JSON.stringify(fallbackUser));
-
-        // Try to sync with Supabase in the background (optional)
+        // Try to get existing user data from Supabase first
         try {
-          const supabaseUser = await userService.upsertUser({
-            firebase_uid: firebaseUser.uid,
-            name: fallbackUser.name,
-            email: fallbackUser.email,
-            role: 'client',
-            avatar: fallbackUser.avatar,
-            phone: fallbackUser.phone,
-            verified: firebaseUser.emailVerified,
-            joinedDate: firebaseUser.metadata.creationTime || new Date().toISOString()
-          });
+          const existingUser = await userService.getUserByFirebaseUid(firebaseUser.uid);
           
-          // If Supabase sync succeeds, update user data
-          if (supabaseUser) {
-            setUser(supabaseUser);
-            localStorage.setItem('user', JSON.stringify(supabaseUser));
+          if (existingUser) {
+            // User exists in Supabase, use that data (preserves role)
+            setUser(existingUser);
+            localStorage.setItem('user', JSON.stringify(existingUser));
+          } else {
+            // User doesn't exist in Supabase, create fallback with default client role
+            const fallbackUser: User = {
+              id: firebaseUser.uid,
+              firebase_uid: firebaseUser.uid,
+              name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
+              email: firebaseUser.email || '',
+              role: 'client', // Default role for Firebase-only users
+              avatar: firebaseUser.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(firebaseUser.displayName || 'User')}&background=3b82f6&color=fff`,
+              phone: firebaseUser.phoneNumber || '',
+              verified: firebaseUser.emailVerified,
+              joinedDate: firebaseUser.metadata.creationTime || new Date().toISOString()
+            };
+
+            setUser(fallbackUser);
+            localStorage.setItem('user', JSON.stringify(fallbackUser));
           }
         } catch (error) {
-          console.warn('Supabase sync failed, using Firebase data only:', error);
-          // Continue with Firebase data - don't throw error
+          console.warn('Failed to get user from Supabase, using Firebase data only:', error);
+          
+          // Fallback to Firebase data only
+          const fallbackUser: User = {
+            id: firebaseUser.uid,
+            firebase_uid: firebaseUser.uid,
+            name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
+            email: firebaseUser.email || '',
+            role: 'client',
+            avatar: firebaseUser.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(firebaseUser.displayName || 'User')}&background=3b82f6&color=fff`,
+            phone: firebaseUser.phoneNumber || '',
+            verified: firebaseUser.emailVerified,
+            joinedDate: firebaseUser.metadata.creationTime || new Date().toISOString()
+          };
+
+          setUser(fallbackUser);
+          localStorage.setItem('user', JSON.stringify(fallbackUser));
         }
       } else {
         setUser(null);

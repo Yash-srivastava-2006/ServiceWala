@@ -1,6 +1,8 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Search, Filter, Star, MapPin, SlidersHorizontal } from 'lucide-react';
-import { mockServices as services, mockCategories } from '../data/mockData';
+import { mockServices, mockCategories } from '../data/mockData';
+import { serviceService } from '../services/database';
+import { Service } from '../types';
 import { useLocation } from '../context/LocationContext';
 import ServiceCard from '../components/ServiceCard';
 import LocationSelector from '../components/LocationSelector';
@@ -12,8 +14,43 @@ const Services: React.FC = () => {
   const [rating, setRating] = useState('');
   const [sortBy, setSortBy] = useState('rating');
   const [showFilters, setShowFilters] = useState(false);
+  const [services, setServices] = useState<Service[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   
   const { selectedState, selectedCity, setSelectedState, setSelectedCity } = useLocation();
+
+  useEffect(() => {
+    loadServices();
+  }, []);
+
+  const loadServices = async () => {
+    setIsLoading(true);
+    try {
+      // Try to load from database first
+      const dbServices = await serviceService.getAllServices();
+      if (dbServices.length > 0) {
+        setServices(dbServices);
+      } else {
+        // Fallback to mock data if no services in database
+        // Convert mock services to match Service type (number id to string)
+        const convertedMockServices = mockServices.map(service => ({
+          ...service,
+          id: service.id.toString()
+        }));
+        setServices(convertedMockServices);
+      }
+    } catch (error) {
+      console.error('Error loading services:', error);
+      // Fallback to mock data on error
+      const convertedMockServices = mockServices.map(service => ({
+        ...service,
+        id: service.id.toString()
+      }));
+      setServices(convertedMockServices);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const filteredServices = useMemo(() => {
     let filtered = [...services];
@@ -225,7 +262,12 @@ const Services: React.FC = () => {
             </div>
 
             {/* Services Grid */}
-            {filteredServices.length > 0 ? (
+            {isLoading ? (
+              <div className="text-center py-12">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-600 mx-auto mb-4"></div>
+                <p className="text-gray-600">Loading services...</p>
+              </div>
+            ) : filteredServices.length > 0 ? (
               <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {filteredServices.map((service) => (
                   <ServiceCard key={service.id} service={service} />

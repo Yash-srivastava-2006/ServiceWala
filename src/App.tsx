@@ -12,6 +12,8 @@ import HowItWorks from './pages/HowItWorks';
 import Profile from './pages/Profile';
 import Bookings from './pages/Bookings';
 import Settings from './pages/Settings';
+import ProviderDashboard from './pages/ProviderDashboard';
+import AddService from './pages/AddService';
 
 function App() {
   return (
@@ -31,6 +33,8 @@ function App() {
                 <Route path="/profile" element={<Profile />} />
                 <Route path="/bookings" element={<Bookings />} />
                 <Route path="/settings" element={<Settings />} />
+                <Route path="/provider-dashboard" element={<ProviderDashboard />} />
+                <Route path="/add-service" element={<AddService />} />
               </Routes>
             </div>
           </Router>

@@ -42,7 +42,13 @@ const Signup: React.FC = () => {
       // Map customer to client for consistency with User type
       const role = formData.type === 'customer' ? 'client' : 'provider';
       await signup(formData.name, formData.email, formData.password, role);
-      navigate('/');
+      
+      // Redirect based on user role
+      if (role === 'provider') {
+        navigate('/provider-dashboard');
+      } else {
+        navigate('/');
+      }
     } catch (err: any) {
       // Handle Firebase-specific error codes
       if (err.code) {
