@@ -4,7 +4,7 @@ import { mockServices, mockCategories } from '../data/mockData';
 import { serviceService } from '../services/database';
 import { Service } from '../types';
 import { useLocation } from '../context/LocationContext';
-import ServiceCard from '../components/ServiceCard';
+import EnhancedServiceCard from '../components/EnhancedServiceCard';
 import LocationSelector from '../components/LocationSelector';
 
 const Services: React.FC = () => {
@@ -270,7 +270,11 @@ const Services: React.FC = () => {
             ) : filteredServices.length > 0 ? (
               <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {filteredServices.map((service) => (
-                  <ServiceCard key={service.id} service={service} />
+                  <EnhancedServiceCard 
+                    key={service.id} 
+                    service={service} 
+                    onClick={() => {/* Handle service click */}} 
+                  />
                 ))}
               </div>
             ) : (
