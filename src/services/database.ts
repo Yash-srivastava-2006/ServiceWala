@@ -7,6 +7,8 @@ export const userService = {
   // Create or update user in Supabase when they sign up/login with Firebase
   async upsertUser(userData: Partial<User>): Promise<User | null> {
     try {
+      console.log('Attempting to upsert user:', userData);
+      
       const insertData = {
         firebase_uid: userData.firebase_uid,
         name: userData.name,
@@ -27,6 +29,8 @@ export const userService = {
         updated_at: new Date().toISOString()
       };
       
+      console.log('Insert data prepared:', insertData);
+      
       const { data, error } = await (supabase
         .from(TABLES.USERS) as any)
         .upsert([insertData], {
@@ -37,13 +41,17 @@ export const userService = {
 
       if (error) {
         console.error('Supabase upsert error:', error);
+        console.error('Error code:', error.code);
+        console.error('Error message:', error.message);
+        console.error('Error details:', error.details);
         throw error;
       }
       
+      console.log('User successfully upserted to Supabase:', data);
       return this.transformUserFromDB(data);
     } catch (error) {
-      console.error('Error upserting user:', error);
-      return null;
+      console.error('Error upserting user - full error:', error);
+      throw error; // Re-throw the error instead of returning null
     }
   },
 
