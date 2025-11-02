@@ -15,8 +15,7 @@ import {
   AlertCircle,
   Edit,
   Eye,
-  MapPin,
-  DollarSign
+  MapPin
 } from 'lucide-react';
 import { Booking, Service } from '../types';
 
@@ -146,7 +145,7 @@ const ProviderDashboard: React.FC = () => {
         
         <div className="mt-3 pt-3 border-t border-gray-100">
           <div className="flex items-center justify-between">
-            <span className="font-semibold text-gray-900">${booking.price}</span>
+            <span className="font-semibold text-gray-900">₹{booking.price}</span>
             <button className="text-blue-600 hover:text-blue-700 text-sm font-medium">
               View Details
             </button>
@@ -256,7 +255,7 @@ const ProviderDashboard: React.FC = () => {
           <StatCard
             icon={<TrendingUp className="w-6 h-6 text-white" />}
             title="Monthly Earnings"
-            value={`$${stats.monthlyEarnings}`}
+            value={`₹${stats.monthlyEarnings}`}
             color="bg-indigo-500"
           />
         </div>
@@ -404,7 +403,6 @@ const ProviderDashboard: React.FC = () => {
                           
                           <div className="flex items-center justify-between">
                             <div className="flex items-center text-lg font-semibold text-gray-900">
-                              <DollarSign className="w-4 h-4 mr-1" />
                               ₹{service.price}
                               <span className="text-sm font-normal text-gray-500 ml-1">
                                 {service.priceType === 'hourly' ? '/hr' : ''}

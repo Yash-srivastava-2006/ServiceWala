@@ -172,7 +172,7 @@ const Bookings: React.FC = () => {
                       </div>
                     </div>
                     <div className="text-right">
-                      <p className="text-2xl font-bold text-gray-900">${booking.price}</p>
+                      <p className="text-2xl font-bold text-gray-900">₹{booking.price}</p>
                       <button className="mt-2 p-2 hover:bg-gray-100 rounded-full transition-colors">
                         <MoreVertical className="h-5 w-5 text-gray-400" />
                       </button>

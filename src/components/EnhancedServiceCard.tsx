@@ -1,6 +1,6 @@
 // Enhanced ServiceCard component with better image display
 import React from 'react';
-import { Star, MapPin, Clock, DollarSign } from 'lucide-react';
+import { Star, MapPin, Clock } from 'lucide-react';
 import { Service } from '../types';
 
 interface ServiceCardProps {
@@ -44,7 +44,6 @@ const ServiceCard: React.FC<ServiceCardProps> = ({ service, onClick }) => {
         {/* Price Badge */}
         <div className="absolute bottom-3 left-3 bg-white bg-opacity-90 px-2 py-1 rounded-lg">
           <div className="flex items-center space-x-1">
-            <DollarSign className="w-4 h-4 text-green-600" />
             <span className="font-semibold text-gray-900">
               ₹{service.price}
               {service.priceType === 'hourly' && (

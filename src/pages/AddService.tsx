@@ -4,7 +4,6 @@ import {
   ArrowLeft, 
   Plus, 
   X, 
-  DollarSign,
   Tag,
   AlertCircle,
   CheckCircle,
@@ -421,7 +420,6 @@ const AddService: React.FC = () => {
                 Price (₹) *
               </label>
               <div className="relative">
-                <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                 <input
                   type="number"
                   id="price"
@@ -431,7 +429,7 @@ const AddService: React.FC = () => {
                   placeholder="0"
                   min="0"
                   step="0.01"
-                  className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   required
                 />
               </div>
