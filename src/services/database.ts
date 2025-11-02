@@ -7,51 +7,87 @@ export const userService = {
   // Create or update user in Supabase when they sign up/login with Firebase
   async upsertUser(userData: Partial<User>): Promise<User | null> {
     try {
-      console.log('Attempting to upsert user:', userData);
+      console.log('🔄 Attempting to upsert user:', userData);
+      
+      // Validate required fields
+      if (!userData.firebase_uid || !userData.email || !userData.name) {
+        throw new Error('Missing required fields: firebase_uid, email, or name');
+      }
       
       const insertData = {
         firebase_uid: userData.firebase_uid,
         name: userData.name,
         email: userData.email,
-        avatar: userData.avatar,
-        role: userData.role || 'client', // Default to 'client' if no role specified
-        phone: userData.phone,
-        location: userData.location,
-        city: userData.city,
-        state: userData.state,
+        avatar: userData.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(userData.name)}&background=3b82f6&color=fff`,
+        role: userData.role || 'client',
+        phone: userData.phone || null,
+        location: userData.location || null,
+        city: userData.city || null,
+        state: userData.state || null,
         verified: userData.verified || false,
-        bio: userData.bio,
+        bio: userData.bio || null,
         experience_years: userData.experienceYears || 0,
         specialties: userData.specialties || [],
         skills: userData.skills || [],
         completed_jobs: userData.completedJobs || 0,
-        rating: userData.rating || 0.0,
-        updated_at: new Date().toISOString()
+        rating: userData.rating || 0.0
       };
       
-      console.log('Insert data prepared:', insertData);
+      console.log('📋 Insert data prepared:', insertData);
       
+      // Use a simpler query without TypeScript generics to avoid 406 errors
       const { data, error } = await (supabase
-        .from(TABLES.USERS) as any)
-        .upsert([insertData], {
-          onConflict: 'firebase_uid'
+        .from('users') as any)
+        .upsert(insertData, {
+          onConflict: 'firebase_uid',
+          ignoreDuplicates: false
         })
-        .select()
+        .select('*')
         .single();
 
       if (error) {
-        console.error('Supabase upsert error:', error);
+        console.error('❌ Supabase upsert error:', error);
         console.error('Error code:', error.code);
         console.error('Error message:', error.message);
         console.error('Error details:', error.details);
+        console.error('Error hint:', error.hint);
+        
+        // Check if it's a constraint violation
+        if (error.code === '23505') {
+          console.log('🔄 Duplicate key error, trying to update instead...');
+          
+          // Try to update the existing record
+          const { data: updateData, error: updateError } = await (supabase
+            .from('users') as any)
+            .update(insertData)
+            .eq('firebase_uid', userData.firebase_uid)
+            .select('*')
+            .single();
+          
+          if (updateError) {
+            throw updateError;
+          }
+          
+          console.log('✅ User updated successfully:', updateData);
+          return this.transformUserFromDB(updateData);
+        }
+        
         throw error;
       }
       
-      console.log('User successfully upserted to Supabase:', data);
+      console.log('✅ User successfully upserted to Supabase:', data);
       return this.transformUserFromDB(data);
     } catch (error) {
-      console.error('Error upserting user - full error:', error);
-      throw error; // Re-throw the error instead of returning null
+      console.error('💥 Critical error upserting user:', error);
+      
+      // Provide more specific error information
+      if (error instanceof Error) {
+        console.error('Error name:', error.name);
+        console.error('Error message:', error.message);
+        console.error('Error stack:', error.stack);
+      }
+      
+      throw error;
     }
   },
 
