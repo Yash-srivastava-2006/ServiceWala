@@ -1,5 +1,5 @@
 export interface Service {
-  id: string | number;
+  id: string;
   title: string;
   description: string;
   price: number;
@@ -32,30 +32,45 @@ export interface Service {
 
 export interface User {
   id: string;
+  firebase_uid?: string;
   name: string;
   email: string;
   avatar?: string;
-  role: 'client' | 'provider';
+  role: 'client' | 'provider'; // client = customer, provider = service provider
   phone?: string;
   location?: string;
+  city?: string;
+  state?: string;
   joinedDate?: string;
   verified?: boolean;
+  // Provider specific fields
+  bio?: string;
+  experienceYears?: number;
+  specialties?: string[];
+  skills?: string[];
+  completedJobs?: number;
+  rating?: number;
 }
 
 export interface AuthContextType {
   user: User | null;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string, role?: 'client' | 'provider') => Promise<void>;
+  loginWithGoogle: () => Promise<void>;
   signup: (name: string, email: string, password: string, role: 'client' | 'provider') => Promise<void>;
-  logout: () => void;
-  updateProfile: (updates: Partial<User>) => void;
+  logout: () => Promise<void> | void;
+  updateProfile: (updates: Partial<User>) => Promise<void>;
   isLoading: boolean;
+  // Authentication is Firebase-only in production builds
 }
 
 export interface FilterOptions {
-  category: string;
-  priceRange: string;
-  rating: number;
-  location: string;
+  category?: string;
+  priceRange?: string;
+  rating?: number;
+  location?: string;
+  city?: string;
+  state?: string;
+  query?: string;
 }
 
 export interface Booking {
@@ -63,15 +78,41 @@ export interface Booking {
   serviceId: string;
   serviceName: string;
   providerName: string;
+  providerId: string;
   date: string;
   time: string;
-  status: 'pending' | 'confirmed' | 'completed' | 'cancelled';
+  status: 'pending' | 'confirmed' | 'in_progress' | 'completed' | 'cancelled';
   price: number;
   image: string;
   location: string;
+  specialInstructions?: string;
+  estimatedDuration?: number;
 }
 
 export interface State {
   name: string;
   cities: string[];
+}
+
+// Add these essential interfaces that match your database
+export interface Category {
+  id: string;
+  name: string;
+  description?: string;
+  icon?: string;
+  isActive: boolean;
+}
+
+export interface Review {
+  id: string;
+  userId: string;
+  providerId: string;
+  serviceId?: string;
+  bookingId?: string;
+  rating: number;
+  comment: string;
+  date: string;
+  userName: string;
+  userAvatar?: string;
+  verified?: boolean;
 }

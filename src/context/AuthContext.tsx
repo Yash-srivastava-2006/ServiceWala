@@ -1,5 +1,15 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { 
+  signInWithEmailAndPassword, 
+  createUserWithEmailAndPassword, 
+  signOut, 
+  onAuthStateChanged,
+  signInWithPopup,
+  User as FirebaseUser 
+} from 'firebase/auth';
+import { auth, googleProvider } from '../config/firebase';
 import { AuthContextType, User } from '../types';
+import { userService } from '../services/database';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -14,92 +24,175 @@ export const useAuth = () => {
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  // Firebase-only authentication (demo/mock mode removed)
 
   useEffect(() => {
-    // Check for stored user session
-    const storedUser = localStorage.getItem('user');
-    if (storedUser) {
-      setUser(JSON.parse(storedUser));
-    }
+    // Firebase auth state listener
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: FirebaseUser | null) => {
+      if (firebaseUser) {
+        // Try to get existing user data from Supabase first
+        try {
+          const existingUser = await userService.getUserByFirebaseUid(firebaseUser.uid);
+          
+          if (existingUser) {
+            // User exists in Supabase, use that data (preserves role)
+            setUser(existingUser);
+            localStorage.setItem('user', JSON.stringify(existingUser));
+          } else {
+            // User doesn't exist in Supabase, create fallback with default client role
+            const fallbackUser: User = {
+              id: firebaseUser.uid,
+              firebase_uid: firebaseUser.uid,
+              name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
+              email: firebaseUser.email || '',
+              role: 'client', // Default role for Firebase-only users
+              avatar: firebaseUser.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(firebaseUser.displayName || 'User')}&background=3b82f6&color=fff`,
+              phone: firebaseUser.phoneNumber || '',
+              verified: firebaseUser.emailVerified,
+              joinedDate: firebaseUser.metadata.creationTime || new Date().toISOString()
+            };
+
+            setUser(fallbackUser);
+            localStorage.setItem('user', JSON.stringify(fallbackUser));
+          }
+        } catch (error) {
+          console.warn('Failed to get user from Supabase, using Firebase data only:', error);
+          
+          // Fallback to Firebase data only
+          const fallbackUser: User = {
+            id: firebaseUser.uid,
+            firebase_uid: firebaseUser.uid,
+            name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
+            email: firebaseUser.email || '',
+            role: 'client',
+            avatar: firebaseUser.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(firebaseUser.displayName || 'User')}&background=3b82f6&color=fff`,
+            phone: firebaseUser.phoneNumber || '',
+            verified: firebaseUser.emailVerified,
+            joinedDate: firebaseUser.metadata.creationTime || new Date().toISOString()
+          };
+
+          setUser(fallbackUser);
+          localStorage.setItem('user', JSON.stringify(fallbackUser));
+        }
+      } else {
+        setUser(null);
+        localStorage.removeItem('user');
+      }
+      setIsLoading(false);
+    });
+
+    return () => unsubscribe();
   }, []);
 
-  const login = async (email: string, password: string) => {
+  const login = async (email: string, password: string, role?: 'client' | 'provider') => {
     setIsLoading(true);
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Firebase authentication
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
       
-      // Extract name from email for demo purposes
-      const name = email.split('@')[0].replace(/[._]/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+      // If role is provided, update user data with the role
+      if (role && userCredential.user) {
+        try {
+          await userService.upsertUser({
+            firebase_uid: userCredential.user.uid,
+            name: userCredential.user.displayName || userCredential.user.email?.split('@')[0] || 'User',
+            email: userCredential.user.email || '',
+            role: role, // Update role based on login selection
+            verified: userCredential.user.emailVerified
+          });
+        } catch (error) {
+          console.warn('Supabase role sync during login failed:', error);
+          // Continue with Firebase auth - don't fail the login
+        }
+      }
       
-      const mockUser: User = {
-        id: '1',
-        name: name,
-        email,
-        role: 'client',
-        avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=3b82f6&color=fff`,
-        phone: '+1 (555) 123-4567',
-        location: 'New York, NY',
-        joinedDate: '2023-01-15',
-        verified: true
-      };
-      
-      setUser(mockUser);
-      localStorage.setItem('user', JSON.stringify(mockUser));
+      // User state will be updated automatically by onAuthStateChanged
+      // Don't set loading to false here - let onAuthStateChanged handle it
     } catch (error) {
-      throw new Error('Login failed');
-    } finally {
+      setIsLoading(false); // Always reset loading state on error
+      throw error; // Re-throw the original error to preserve Firebase error codes
+    }
+  };
+
+  const loginWithGoogle = async () => {
+    // Google Sign-In via Firebase
+    setIsLoading(true);
+    try {
+      await signInWithPopup(auth, googleProvider);
+      // User state will be updated automatically by onAuthStateChanged
+    } catch (error) {
       setIsLoading(false);
+      throw error;
     }
   };
 
   const signup = async (name: string, email: string, password: string, role: 'client' | 'provider') => {
     setIsLoading(true);
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      const mockUser: User = {
-        id: Date.now().toString(),
-        name,
-        email,
-        role,
-        avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=3b82f6&color=fff`,
-        phone: '',
-        location: '',
-        joinedDate: new Date().toISOString().split('T')[0],
-        verified: false
-      };
-      
-      setUser(mockUser);
-      localStorage.setItem('user', JSON.stringify(mockUser));
+      // Firebase authentication
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+
+      // Always sync with Supabase with the specified role
+      try {
+        await userService.upsertUser({
+          firebase_uid: userCredential.user.uid,
+          name: name,
+          email: email,
+          role: role, // Always use the role provided during signup
+          verified: false
+        });
+      } catch (error) {
+        console.warn('Supabase sync during signup failed:', error);
+        // Continue with Firebase auth - don't fail the signup
+      }
+
+      // User state will be updated automatically by onAuthStateChanged
     } catch (error) {
-      throw new Error('Signup failed');
-    } finally {
-      setIsLoading(false);
+      setIsLoading(false); // Always reset loading state on error
+      throw error; // Re-throw the original error to preserve Firebase error codes
     }
   };
 
-  const logout = () => {
-    setUser(null);
-    localStorage.removeItem('user');
+  const logout = async () => {
+    await signOut(auth);
+    // User state will be updated automatically by onAuthStateChanged
   };
 
-  const updateProfile = (updates: Partial<User>) => {
+  const updateProfile = async (updates: Partial<User>) => {
     if (user) {
-      const updatedUser = { ...user, ...updates };
-      setUser(updatedUser);
-      localStorage.setItem('user', JSON.stringify(updatedUser));
+      try {
+        if (user.firebase_uid) {
+          // Update in Supabase
+          const updatedUser = await userService.updateUser(user.id, updates);
+          if (updatedUser) {
+            setUser(updatedUser);
+            localStorage.setItem('user', JSON.stringify(updatedUser));
+          }
+        } else {
+          // Local user object - update locally
+          const updatedUser = { ...user, ...updates };
+          setUser(updatedUser);
+          localStorage.setItem('user', JSON.stringify(updatedUser));
+        }
+      } catch (error) {
+        console.error('Error updating profile:', error);
+        // Fallback to local update if Supabase fails
+        const updatedUser = { ...user, ...updates };
+        setUser(updatedUser);
+        localStorage.setItem('user', JSON.stringify(updatedUser));
+      }
     }
   };
 
   const value: AuthContextType = {
     user,
     login,
+    loginWithGoogle,
     signup,
     logout,
     updateProfile,
-    isLoading
+    isLoading,
+    // Firebase-only: demo mode removed
   };
 
   return (
