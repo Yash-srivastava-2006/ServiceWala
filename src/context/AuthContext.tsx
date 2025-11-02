@@ -132,18 +132,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Firebase authentication
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
 
+      console.log('Firebase user created:', userCredential.user.uid);
+
       // Always sync with Supabase with the specified role
+      let supabaseUser = null;
       try {
-        await userService.upsertUser({
+        supabaseUser = await userService.upsertUser({
           firebase_uid: userCredential.user.uid,
           name: name,
           email: email,
           role: role, // Always use the role provided during signup
-          verified: false
+          verified: false,
+          avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=3b82f6&color=fff`
         });
-      } catch (error) {
-        console.warn('Supabase sync during signup failed:', error);
-        // Continue with Firebase auth - don't fail the signup
+
+        console.log('User successfully created in Supabase:', supabaseUser?.id);
+      } catch (supabaseError) {
+        console.error('❌ CRITICAL: Supabase sync during signup failed!');
+        console.error('Supabase error details:', JSON.stringify(supabaseError, null, 2));
+        console.error('User will exist in Firebase but not in Supabase database');
+        
+        // Show user-friendly error but don't fail the signup
+        console.warn('⚠️ Account created but some features may not work properly. Please contact support if issues persist.');
       }
 
       // User state will be updated automatically by onAuthStateChanged
