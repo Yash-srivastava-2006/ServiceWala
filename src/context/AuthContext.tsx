@@ -38,27 +38,58 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             // User exists in Supabase, use that data (preserves role)
             setUser(existingUser);
             localStorage.setItem('user', JSON.stringify(existingUser));
+            console.log('✅ Existing user loaded from Supabase:', existingUser.name);
           } else {
-            // User doesn't exist in Supabase, create fallback with default client role
-            const fallbackUser: User = {
-              id: firebaseUser.uid,
-              firebase_uid: firebaseUser.uid,
-              name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
-              email: firebaseUser.email || '',
-              role: 'client', // Default role for Firebase-only users
-              avatar: firebaseUser.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(firebaseUser.displayName || 'User')}&background=3b82f6&color=fff`,
-              phone: firebaseUser.phoneNumber || '',
-              verified: firebaseUser.emailVerified,
-              joinedDate: firebaseUser.metadata.creationTime || new Date().toISOString()
-            };
+            console.log('🔄 User not found in Supabase, creating new record...');
+            
+            // User doesn't exist in Supabase, create them now
+            try {
+              const newUserData = {
+                firebase_uid: firebaseUser.uid,
+                name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
+                email: firebaseUser.email || '',
+                role: 'client' as const, // Default role for new users
+                avatar: firebaseUser.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(firebaseUser.displayName || 'User')}&background=3b82f6&color=fff`,
+                phone: firebaseUser.phoneNumber || '',
+                verified: firebaseUser.emailVerified
+              };
+              
+              console.log('📝 Creating Supabase user with data:', newUserData);
+              const createdUser = await userService.upsertUser(newUserData);
+              
+              if (createdUser) {
+                setUser(createdUser);
+                localStorage.setItem('user', JSON.stringify(createdUser));
+                console.log('✅ User successfully created in Supabase:', createdUser.name);
+              } else {
+                throw new Error('Failed to create user in Supabase');
+              }
+              
+            } catch (supabaseError) {
+              console.error('❌ Failed to create user in Supabase:', supabaseError);
+              
+              // Fallback to Firebase-only user (but this means features won't work)
+              const fallbackUser: User = {
+                id: firebaseUser.uid,
+                firebase_uid: firebaseUser.uid,
+                name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
+                email: firebaseUser.email || '',
+                role: 'client', // Default role for Firebase-only users
+                avatar: firebaseUser.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(firebaseUser.displayName || 'User')}&background=3b82f6&color=fff`,
+                phone: firebaseUser.phoneNumber || '',
+                verified: firebaseUser.emailVerified,
+                joinedDate: firebaseUser.metadata.creationTime || new Date().toISOString()
+              };
 
-            setUser(fallbackUser);
-            localStorage.setItem('user', JSON.stringify(fallbackUser));
+              setUser(fallbackUser);
+              localStorage.setItem('user', JSON.stringify(fallbackUser));
+              console.warn('⚠️ Using fallback user - some features may not work');
+            }
           }
         } catch (error) {
-          console.warn('Failed to get user from Supabase, using Firebase data only:', error);
+          console.error('❌ Error during user authentication:', error);
           
-          // Fallback to Firebase data only
+          // Final fallback to Firebase data only
           const fallbackUser: User = {
             id: firebaseUser.uid,
             firebase_uid: firebaseUser.uid,
