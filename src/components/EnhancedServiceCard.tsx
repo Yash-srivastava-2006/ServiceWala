@@ -1,14 +1,15 @@
 // Enhanced ServiceCard component with better image display
 import React from 'react';
-import { Star, MapPin, Clock } from 'lucide-react';
+import { Star, MapPin, Clock, Calendar } from 'lucide-react';
 import { Service } from '../types';
 
 interface ServiceCardProps {
   service: Service;
   onClick: () => void;
+  onBookNow?: (service: Service) => void;
 }
 
-const ServiceCard: React.FC<ServiceCardProps> = ({ service, onClick }) => {
+const ServiceCard: React.FC<ServiceCardProps> = ({ service, onClick, onBookNow }) => {
   // Get the first image or use a placeholder
   const primaryImage = service.images && service.images.length > 0 
     ? service.images[0] 
@@ -123,6 +124,22 @@ const ServiceCard: React.FC<ServiceCardProps> = ({ service, onClick }) => {
                 +{service.tags.length - 3} more
               </span>
             )}
+          </div>
+        )}
+
+        {/* Book Now Button */}
+        {onBookNow && (
+          <div className="mt-4 pt-3 border-t border-gray-100">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onBookNow(service);
+              }}
+              className="w-full flex items-center justify-center space-x-2 bg-orange-600 text-white py-2 px-4 rounded-lg hover:bg-orange-700 transition-colors"
+            >
+              <Calendar className="w-4 h-4" />
+              <span>Book Now</span>
+            </button>
           </div>
         )}
       </div>

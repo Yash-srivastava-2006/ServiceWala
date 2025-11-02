@@ -4,7 +4,9 @@ import { mockServices, mockCategories } from '../data/mockData';
 import { serviceService } from '../services/database';
 import { Service } from '../types';
 import { useLocation } from '../context/LocationContext';
+import { useAuth } from '../context/AuthContext';
 import EnhancedServiceCard from '../components/EnhancedServiceCard';
+import BookingModal from '../components/BookingModal';
 import LocationSelector from '../components/LocationSelector';
 
 const Services: React.FC = () => {
@@ -17,7 +19,13 @@ const Services: React.FC = () => {
   const [services, setServices] = useState<Service[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   
+  // Booking modal state
+  const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
+  const [selectedService, setSelectedService] = useState<Service | null>(null);
+  const [bookingSuccess, setBookingSuccess] = useState(false);
+  
   const { selectedState, selectedCity, setSelectedState, setSelectedCity } = useLocation();
+  const { user } = useAuth();
 
   useEffect(() => {
     loadServices();
@@ -50,6 +58,26 @@ const Services: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Booking handlers
+  const handleBookNow = (service: Service) => {
+    if (!user) {
+      alert('Please log in to book a service');
+      return;
+    }
+    setSelectedService(service);
+    setIsBookingModalOpen(true);
+  };
+
+  const handleBookingSuccess = () => {
+    setBookingSuccess(true);
+    setTimeout(() => setBookingSuccess(false), 3000); // Hide success message after 3 seconds
+  };
+
+  const handleCloseBookingModal = () => {
+    setIsBookingModalOpen(false);
+    setSelectedService(null);
   };
 
   const filteredServices = useMemo(() => {
@@ -273,7 +301,8 @@ const Services: React.FC = () => {
                   <EnhancedServiceCard 
                     key={service.id} 
                     service={service} 
-                    onClick={() => {/* Handle service click */}} 
+                    onClick={() => {/* Handle service click - could navigate to service detail */}} 
+                    onBookNow={handleBookNow}
                   />
                 ))}
               </div>
@@ -305,6 +334,26 @@ const Services: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Success Message */}
+      {bookingSuccess && (
+        <div className="fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50">
+          <div className="flex items-center space-x-2">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+            <span>Booking request sent successfully!</span>
+          </div>
+        </div>
+      )}
+
+      {/* Booking Modal */}
+      <BookingModal
+        service={selectedService}
+        isOpen={isBookingModalOpen}
+        onClose={handleCloseBookingModal}
+        onBookingSuccess={handleBookingSuccess}
+      />
     </div>
   );
 };

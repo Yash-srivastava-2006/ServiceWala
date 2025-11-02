@@ -77,16 +77,20 @@ export interface Booking {
   id: string;
   serviceId: string;
   serviceName: string;
+  userId: string;
   providerName: string;
   providerId: string;
   date: string;
   time: string;
-  status: 'pending' | 'confirmed' | 'in_progress' | 'completed' | 'cancelled';
+  status: 'pending' | 'approved' | 'rejected' | 'in_progress' | 'completed' | 'cancelled';
   price: number;
   image: string;
   location: string;
   specialInstructions?: string;
   estimatedDuration?: number;
+  customerName?: string;
+  requestedAt?: string;
+  respondedAt?: string;
 }
 
 export interface State {

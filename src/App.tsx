@@ -11,6 +11,7 @@ import Signup from './pages/Signup';
 import HowItWorks from './pages/HowItWorks';
 import Profile from './pages/Profile';
 import Bookings from './pages/Bookings';
+import BookingStatus from './pages/BookingStatus';
 import Settings from './pages/Settings';
 import ProviderDashboard from './pages/ProviderDashboard';
 import AddService from './pages/AddService';
@@ -32,6 +33,7 @@ function App() {
                 <Route path="/how-it-works" element={<HowItWorks />} />
                 <Route path="/profile" element={<Profile />} />
                 <Route path="/bookings" element={<Bookings />} />
+                <Route path="/booking/:bookingId" element={<BookingStatus />} />
                 <Route path="/settings" element={<Settings />} />
                 <Route path="/provider-dashboard" element={<ProviderDashboard />} />
                 <Route path="/add-service" element={<AddService />} />

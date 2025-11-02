@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { useData } from '../context/DataContext';
-import { serviceService } from '../services/database';
+import { serviceService, bookingService, userService } from '../services/database';
 import { 
   Briefcase, 
   Calendar, 
@@ -15,20 +14,26 @@ import {
   AlertCircle,
   Edit,
   Eye,
-  MapPin
+  MapPin,
+  Bell,
+  Users
 } from 'lucide-react';
 import { Booking, Service } from '../types';
+import BookingRequest from '../components/BookingRequest';
 
 const ProviderDashboard: React.FC = () => {
   const { user } = useAuth();
-  const { userBookings, isLoadingBookings } = useData();
   const [activeTab, setActiveTab] = useState('overview');
   const [providerServices, setProviderServices] = useState<Service[]>([]);
+  const [pendingRequests, setPendingRequests] = useState<Booking[]>([]);
+  const [providerBookings, setProviderBookings] = useState<Booking[]>([]);
   const [isLoadingServices, setIsLoadingServices] = useState(false);
+  const [isLoadingRequests, setIsLoadingRequests] = useState(false);
 
   const [stats, setStats] = useState({
     totalServices: 0,
     activeBookings: 0,
+    pendingRequests: 0,
     completedJobs: user?.completedJobs || 0,
     rating: user?.rating || 0,
     monthlyEarnings: 0
@@ -54,13 +59,15 @@ const ProviderDashboard: React.FC = () => {
     
     // Load provider services
     loadProviderServices();
+    loadProviderRequests();
+    loadProviderBookings();
     
     // Calculate stats from bookings
-    const activeBookings = userBookings.filter(booking => 
-      ['pending', 'confirmed', 'in_progress'].includes(booking.status)
+    const activeBookings = providerBookings.filter(booking => 
+      ['confirmed', 'in_progress'].includes(booking.status)
     ).length;
     
-    const monthlyEarnings = userBookings
+    const monthlyEarnings = providerBookings
       .filter(booking => {
         const bookingDate = new Date(booking.date);
         const currentMonth = new Date().getMonth();
@@ -75,22 +82,74 @@ const ProviderDashboard: React.FC = () => {
       ...prev,
       totalServices: providerServices.length,
       activeBookings,
+      pendingRequests: pendingRequests.length,
       monthlyEarnings
     }));
-  }, [user, userBookings, providerServices.length]);
+  }, [user, providerBookings, providerServices.length, pendingRequests.length]);
 
   const loadProviderServices = async () => {
-    if (!user?.id) return;
+    if (!user?.id) {
+      console.log('[ProviderDashboard] No user ID available for loading services');
+      return;
+    }
+    
+    console.log('[ProviderDashboard] Loading services for provider:', user.id, 'Name:', user.name, 'Role:', user.role);
+    
+    // Debug: Check if user exists in database
+    try {
+      const dbUser = await userService.getUserByFirebaseUid(user.firebase_uid || user.id);
+      console.log('[ProviderDashboard] User in database:', dbUser);
+      
+      if (!dbUser) {
+        console.warn('[ProviderDashboard] User not found in database! This could be why services are not loading.');
+      } else if (dbUser.role !== 'provider') {
+        console.warn('[ProviderDashboard] User role in database is not provider:', dbUser.role);
+      }
+    } catch (err) {
+      console.error('[ProviderDashboard] Error checking user in database:', err);
+    }
     
     setIsLoadingServices(true);
     try {
       const services = await serviceService.getServicesByProvider(user.id);
+      console.log('[ProviderDashboard] Loaded services:', services);
       setProviderServices(services);
     } catch (error) {
-      console.error('Error loading provider services:', error);
+      console.error('[ProviderDashboard] Error loading provider services:', error);
     } finally {
       setIsLoadingServices(false);
     }
+  };
+
+  const loadProviderRequests = async () => {
+    if (!user?.id) return;
+    
+    setIsLoadingRequests(true);
+    try {
+      const requests = await bookingService.getProviderRequests(user.id);
+      setPendingRequests(requests);
+    } catch (error) {
+      console.error('Error loading provider requests:', error);
+    } finally {
+      setIsLoadingRequests(false);
+    }
+  };
+
+  const loadProviderBookings = async () => {
+    if (!user?.id) return;
+    
+    try {
+      const bookings = await bookingService.getProviderBookings(user.id);
+      setProviderBookings(bookings);
+    } catch (error) {
+      console.error('Error loading provider bookings:', error);
+    }
+  };
+
+  const handleRequestUpdate = () => {
+    // Reload requests and bookings when a request is approved/rejected
+    loadProviderRequests();
+    loadProviderBookings();
   };
 
   const StatCard: React.FC<{ icon: React.ReactNode; title: string; value: string | number; color: string }> = 
@@ -112,11 +171,21 @@ const ProviderDashboard: React.FC = () => {
     const getStatusColor = (status: string) => {
       switch (status) {
         case 'pending': return 'bg-yellow-100 text-yellow-800';
-        case 'confirmed': return 'bg-blue-100 text-blue-800';
+        case 'confirmed': 
+        case 'approved': return 'bg-blue-100 text-blue-800';
+        case 'cancelled':
+        case 'rejected': return 'bg-red-100 text-red-800';
         case 'in_progress': return 'bg-purple-100 text-purple-800';
         case 'completed': return 'bg-green-100 text-green-800';
-        case 'cancelled': return 'bg-red-100 text-red-800';
         default: return 'bg-gray-100 text-gray-800';
+      }
+    };
+
+    const getStatusLabel = (status: string) => {
+      switch (status) {
+        case 'confirmed': return 'APPROVED';
+        case 'cancelled': return 'REJECTED';
+        default: return status.replace('_', ' ').toUpperCase();
       }
     };
 
@@ -125,10 +194,10 @@ const ProviderDashboard: React.FC = () => {
         <div className="flex items-start justify-between mb-3">
           <div className="flex-1">
             <h3 className="font-semibold text-gray-900">{booking.serviceName}</h3>
-            <p className="text-sm text-gray-600 mt-1">Client: {booking.providerName}</p>
+            <p className="text-sm text-gray-600 mt-1">Customer: {booking.customerName || 'Customer'}</p>
           </div>
           <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(booking.status)}`}>
-            {booking.status.replace('_', ' ').toUpperCase()}
+            {getStatusLabel(booking.status)}
           </span>
         </div>
         
@@ -146,9 +215,12 @@ const ProviderDashboard: React.FC = () => {
         <div className="mt-3 pt-3 border-t border-gray-100">
           <div className="flex items-center justify-between">
             <span className="font-semibold text-gray-900">₹{booking.price}</span>
-            <button className="text-blue-600 hover:text-blue-700 text-sm font-medium">
+            <Link 
+              to={`/booking/${booking.id}`}
+              className="text-blue-600 hover:text-blue-700 text-sm font-medium"
+            >
               View Details
-            </button>
+            </Link>
           </div>
         </div>
       </div>
@@ -227,12 +299,18 @@ const ProviderDashboard: React.FC = () => {
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6 mb-8">
           <StatCard
             icon={<Briefcase className="w-6 h-6 text-white" />}
             title="Active Services"
             value={stats.totalServices}
             color="bg-blue-500"
+          />
+          <StatCard
+            icon={<Bell className="w-6 h-6 text-white" />}
+            title="Pending Requests"
+            value={stats.pendingRequests}
+            color="bg-orange-500"
           />
           <StatCard
             icon={<Calendar className="w-6 h-6 text-white" />}
@@ -266,14 +344,15 @@ const ProviderDashboard: React.FC = () => {
             <nav className="flex space-x-8 px-6">
               {[
                 { id: 'overview', label: 'Overview', icon: TrendingUp },
+                { id: 'requests', label: 'Requests', icon: Bell, badge: stats.pendingRequests },
                 { id: 'bookings', label: 'Bookings', icon: Calendar },
                 { id: 'services', label: 'My Services', icon: Briefcase },
                 { id: 'reviews', label: 'Reviews', icon: Star }
-              ].map(({ id, label, icon: Icon }) => (
+              ].map(({ id, label, icon: Icon, badge }) => (
                 <button
                   key={id}
                   onClick={() => setActiveTab(id)}
-                  className={`flex items-center py-4 px-1 border-b-2 font-medium text-sm ${
+                  className={`flex items-center py-4 px-1 border-b-2 font-medium text-sm relative ${
                     activeTab === id
                       ? 'border-blue-500 text-blue-600'
                       : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
@@ -281,6 +360,11 @@ const ProviderDashboard: React.FC = () => {
                 >
                   <Icon className="w-4 h-4 mr-2" />
                   {label}
+                  {badge && badge > 0 && (
+                    <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                      {badge}
+                    </span>
+                  )}
                 </button>
               ))}
             </nav>
@@ -290,7 +374,7 @@ const ProviderDashboard: React.FC = () => {
             {activeTab === 'overview' && (
               <div>
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Activity</h3>
-                {userBookings.length === 0 ? (
+                {providerBookings.length === 0 ? (
                   <div className="text-center py-8">
                     <Calendar className="w-16 h-16 text-gray-300 mx-auto mb-4" />
                     <h4 className="text-lg font-medium text-gray-900 mb-2">No bookings yet</h4>
@@ -298,8 +382,51 @@ const ProviderDashboard: React.FC = () => {
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {userBookings.slice(0, 4).map(booking => (
+                    {providerBookings.slice(0, 4).map(booking => (
                       <BookingCard key={booking.id} booking={booking} />
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeTab === 'requests' && (
+              <div>
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-lg font-semibold text-gray-900">Booking Requests</h3>
+                  <div className="flex items-center space-x-4">
+                    <div className="flex items-center text-sm text-gray-600">
+                      <Bell className="w-4 h-4 mr-1" />
+                      {stats.pendingRequests} pending
+                    </div>
+                    <button 
+                      onClick={loadProviderRequests}
+                      className="text-blue-600 hover:text-blue-700 text-sm font-medium"
+                    >
+                      Refresh
+                    </button>
+                  </div>
+                </div>
+                
+                {isLoadingRequests ? (
+                  <div className="text-center py-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                    <p className="text-gray-600">Loading requests...</p>
+                  </div>
+                ) : pendingRequests.length === 0 ? (
+                  <div className="text-center py-8">
+                    <Users className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                    <h4 className="text-lg font-medium text-gray-900 mb-2">No pending requests</h4>
+                    <p className="text-gray-600">New booking requests from customers will appear here.</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6">
+                    {pendingRequests.map(request => (
+                      <BookingRequest 
+                        key={request.id} 
+                        request={request} 
+                        onRequestUpdate={handleRequestUpdate}
+                      />
                     ))}
                   </div>
                 )}
@@ -313,15 +440,14 @@ const ProviderDashboard: React.FC = () => {
                   <select className="border border-gray-300 rounded-lg px-3 py-2 text-sm">
                     <option>All Status</option>
                     <option>Pending</option>
-                    <option>Confirmed</option>
+                    <option>Approved</option>
+                    <option>Rejected</option>
                     <option>In Progress</option>
                     <option>Completed</option>
                   </select>
                 </div>
                 
-                {isLoadingBookings ? (
-                  <div className="text-center py-8">Loading bookings...</div>
-                ) : userBookings.length === 0 ? (
+                {providerBookings.length === 0 ? (
                   <div className="text-center py-8">
                     <Calendar className="w-16 h-16 text-gray-300 mx-auto mb-4" />
                     <h4 className="text-lg font-medium text-gray-900 mb-2">No bookings found</h4>
@@ -329,7 +455,7 @@ const ProviderDashboard: React.FC = () => {
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {userBookings.map(booking => (
+                    {providerBookings.map(booking => (
                       <BookingCard key={booking.id} booking={booking} />
                     ))}
                   </div>
