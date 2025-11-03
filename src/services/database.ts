@@ -233,6 +233,12 @@ export const categoryService = {
 
 // Service Services
 export const serviceService = {
+  // Cache for all services to avoid multiple database calls
+  _servicesCache: null as Service[] | null,
+  _cacheTimestamp: 0,
+  _cacheTimeout: 5 * 60 * 1000, // 5 minutes
+  _fetchPromise: null as Promise<Service[]> | null, // To prevent concurrent fetches
+
   async getAllServices(filters?: {
     category?: string;
     city?: string;
@@ -240,13 +246,74 @@ export const serviceService = {
     query?: string;
   }): Promise<Service[]> {
     try {
-      console.log('Getting all services with filters:', filters);
+      // Check if we have valid cached data and no filters are applied
+      const now = Date.now();
+      const hasValidCache = this._servicesCache && 
+                           (now - this._cacheTimestamp) < this._cacheTimeout;
       
-      // Use supabaseAdmin for better reliability
-      let query = supabaseAdmin
+      // If no filters and we have cached data, return cached data immediately
+      if (!filters && hasValidCache) {
+        console.log('Returning cached services:', this._servicesCache!.length);
+        return this._servicesCache!;
+      }
+
+      // If filters are applied, we need to fetch fresh data
+      if (filters && Object.keys(filters).some(key => filters[key as keyof typeof filters])) {
+        console.log('Getting filtered services with filters:', filters);
+        return await this._fetchServicesFromDB(filters);
+      }
+
+      // For unfiltered requests, check if there's already a fetch in progress
+      if (this._fetchPromise) {
+        console.log('Fetch already in progress, waiting for result...');
+        return await this._fetchPromise;
+      }
+
+      // For unfiltered requests, check cache or fetch all
+      if (!hasValidCache) {
+        console.log('Cache expired or empty, fetching all services from database');
+        
+        // Store the promise to prevent concurrent fetches
+        this._fetchPromise = this._fetchServicesFromDB();
+        
+        try {
+          const allServices = await this._fetchPromise;
+          
+          // Cache the results
+          this._servicesCache = allServices;
+          this._cacheTimestamp = now;
+          
+          return allServices;
+        } finally {
+          // Clear the fetch promise when done
+          this._fetchPromise = null;
+        }
+      }
+
+      return this._servicesCache!;
+    } catch (error) {
+      console.error('Error getting services:', error);
+      // Clear the fetch promise on error
+      this._fetchPromise = null;
+      return [];
+    }
+  },
+
+  async _fetchServicesFromDB(filters?: {
+    category?: string;
+    city?: string;
+    state?: string;
+    query?: string;
+  }): Promise<Service[]> {
+    try {
+      console.log('Starting database fetch with filters:', filters);
+      
+      // Use regular supabase client first, then fallback to admin if needed
+      let query = supabase
         .from(TABLES.SERVICES)
         .select('*')
-        .eq('is_active', true);
+        .eq('is_active', true)
+        .limit(100); // Add limit to prevent large queries
 
       // Apply filters
       if (filters?.city) {
@@ -259,54 +326,137 @@ export const serviceService = {
         query = query.or(`title.ilike.%${filters.query}%,description.ilike.%${filters.query}%`);
       }
 
+      console.log('Executing query...');
       const { data, error } = await query.order('created_at', { ascending: false });
 
       if (error) {
-        console.error('Error in getAllServices:', error);
-        throw error;
+        console.error('Error in _fetchServicesFromDB with regular client:', error);
+        console.log('Trying with admin client...');
+        
+        // Fallback to admin client
+        let adminQuery = supabaseAdmin
+          .from(TABLES.SERVICES)
+          .select('*')
+          .eq('is_active', true)
+          .limit(100);
+
+        // Apply same filters to admin query
+        if (filters?.city) {
+          adminQuery = adminQuery.eq('city', filters.city);
+        }
+        if (filters?.state) {
+          adminQuery = adminQuery.eq('state', filters.state);
+        }
+        if (filters?.query) {
+          adminQuery = adminQuery.or(`title.ilike.%${filters.query}%,description.ilike.%${filters.query}%`);
+        }
+
+        const { data: adminData, error: adminError } = await adminQuery.order('created_at', { ascending: false });
+        
+        if (adminError) {
+          console.error('Error with admin client as well:', adminError);
+          throw adminError;
+        }
+        
+        console.log('Admin client successful, found services:', adminData?.length || 0);
+        return this._transformServices(adminData || []);
       }
       
-      console.log('Found services:', data?.length || 0);
+      console.log('Regular client successful, found services from database:', data?.length || 0);
+      return this._transformServices(data || []);
+    } catch (error) {
+      console.error('Error in _fetchServicesFromDB:', error);
+      throw error;
+    }
+  },
+
+  _transformServices(data: any[]): Service[] {
+    if (!data || data.length === 0) {
+      return [];
+    }
+
+    // Transform manually without joins for now
+    return data.map((service: any) => ({
+      id: service.service_id,
+      title: service.title,
+      description: service.description,
+      price: Number(service.price),
+      priceType: service.price_type,
+      duration: service.duration,
+      category: 'General', // We'll get category separately if needed
+      rating: Number(service.rating),
+      reviewCount: service.review_count,
+      images: service.images || [],
+      providerId: service.provider_id,
+      availability: service.availability || [],
+      location: service.location,
+      state: service.state,
+      city: service.city,
+      tags: service.tags || [],
+      provider: {
+        id: service.provider_id,
+        name: 'Provider',
+        rating: 0,
+        completedJobs: 0,
+        bio: '',
+        yearsExperience: 0,
+        verified: false,
+        specialties: [],
+        reviewCount: 0,
+        avatar: '',
+        location: ''
+      }
+    }));
+  },
+
+  // Method to clear cache when services are created/updated
+  clearCache(): void {
+    this._servicesCache = null;
+    this._cacheTimestamp = 0;
+    this._fetchPromise = null;
+    console.log('Services cache cleared');
+  },
+
+  // Test database connection and check for services
+  async testConnection(): Promise<{ success: boolean; count: number; error?: string }> {
+    try {
+      console.log('Testing database connection...');
       
-      if (!data || data.length === 0) {
-        return [];
+      // Check if we have valid Supabase configuration
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      
+      if (!supabaseUrl || supabaseUrl.includes('placeholder') || 
+          !supabaseAnonKey || supabaseAnonKey.includes('placeholder')) {
+        console.error('Supabase configuration is missing or using placeholder values');
+        console.error('Current URL:', supabaseUrl);
+        console.error('Please create a .env file with valid VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY');
+        return { 
+          success: false, 
+          count: 0, 
+          error: 'Supabase configuration missing. Please create .env file with valid credentials.' 
+        };
+      }
+      
+      // Simple count query to test connection
+      const { count, error } = await supabase
+        .from(TABLES.SERVICES)
+        .select('*', { count: 'exact', head: true });
+
+      if (error) {
+        console.error('Database connection test failed:', error);
+        return { success: false, count: 0, error: error.message };
       }
 
-      // Transform manually without joins for now
-      return data.map((service: any) => ({
-        id: service.service_id,
-        title: service.title,
-        description: service.description,
-        price: Number(service.price),
-        priceType: service.price_type,
-        duration: service.duration,
-        category: 'General', // We'll get category separately if needed
-        rating: Number(service.rating),
-        reviewCount: service.review_count,
-        images: service.images || [],
-        providerId: service.provider_id,
-        availability: service.availability || [],
-        location: service.location,
-        state: service.state,
-        city: service.city,
-        tags: service.tags || [],
-        provider: {
-          id: service.provider_id,
-          name: 'Provider',
-          rating: 0,
-          completedJobs: 0,
-          bio: '',
-          yearsExperience: 0,
-          verified: false,
-          specialties: [],
-          reviewCount: 0,
-          avatar: '',
-          location: ''
-        }
-      }));
+      console.log('Database connection successful. Total services:', count);
+      return { success: true, count: count || 0 };
     } catch (error) {
-      console.error('Error getting services:', error);
-      return [];
+      console.error('Database connection test error:', error);
+      return { 
+        success: false, 
+        count: 0, 
+        error: error instanceof Error ? error.message : 'Unknown error' 
+      };
     }
   },
 
@@ -607,6 +757,9 @@ export const serviceService = {
 
       console.log('Service created successfully:', data);
       
+      // Clear cache since a new service was created
+      this.clearCache();
+      
       // Transform the data manually since we're not using joins
       const createdService = {
         id: (data as any).service_id,
@@ -778,20 +931,22 @@ export const bookingService = {
   async getUserBookings(userId: string): Promise<Booking[]> {
     try {
       console.log('[bookingService] Getting bookings for user:', userId);
+      
       const { data, error } = await supabaseAdmin
         .from(TABLES.BOOKINGS)
-        .select('*')
+        .select('booking_id, service_id, service_name, user_id, provider_name, provider_id, customer_name, booking_date, booking_time, status, price, image, location, special_instructions, estimated_duration, requested_at, responded_at')
         .eq('user_id', userId)
         .order('requested_at', { ascending: false })
-        .limit(50); // Limit results for better performance
+        .limit(20);
 
       if (error) {
         console.error('Error getting user bookings:', error);
-        throw error;
+        // Return empty array on error instead of throwing
+        return [];
       }
       
       console.log('[bookingService] Found', data?.length || 0, 'bookings for user');
-      return data.map(this.transformBookingFromDB);
+      return (data || []).map(this.transformBookingFromDB);
     } catch (error) {
       console.error('Error getting user bookings:', error);
       return [];
@@ -801,21 +956,22 @@ export const bookingService = {
   async getProviderRequests(providerId: string): Promise<Booking[]> {
     try {
       console.log('[bookingService] Getting pending requests for provider:', providerId);
+      
       const { data, error } = await supabaseAdmin
         .from(TABLES.BOOKINGS)
-        .select('*')
+        .select('booking_id, service_id, service_name, user_id, provider_name, provider_id, customer_name, booking_date, booking_time, status, price, image, location, special_instructions, estimated_duration, requested_at, responded_at')
         .eq('provider_id', providerId)
         .eq('status', 'pending')
         .order('requested_at', { ascending: false })
-        .limit(20); // Limit for better performance
+        .limit(10);
 
       if (error) {
         console.error('Error getting provider requests:', error);
-        throw error;
+        return [];
       }
       
       console.log('[bookingService] Found', data?.length || 0, 'pending requests');
-      return data.map(this.transformBookingFromDB);
+      return (data || []).map(this.transformBookingFromDB);
     } catch (error) {
       console.error('Error getting provider requests:', error);
       return [];
@@ -825,20 +981,21 @@ export const bookingService = {
   async getProviderBookings(providerId: string): Promise<Booking[]> {
     try {
       console.log('[bookingService] Getting all bookings for provider:', providerId);
+      
       const { data, error } = await supabaseAdmin
         .from(TABLES.BOOKINGS)
-        .select('*')
+        .select('booking_id, service_id, service_name, user_id, provider_name, provider_id, customer_name, booking_date, booking_time, status, price, image, location, special_instructions, estimated_duration, requested_at, responded_at')
         .eq('provider_id', providerId)
         .order('requested_at', { ascending: false })
-        .limit(50); // Limit results for better performance
+        .limit(20);
 
       if (error) {
         console.error('Error getting provider bookings:', error);
-        throw error;
+        return [];
       }
       
       console.log('[bookingService] Found', data?.length || 0, 'total bookings');
-      return data.map(this.transformBookingFromDB);
+      return (data || []).map(this.transformBookingFromDB);
     } catch (error) {
       console.error('Error getting provider bookings:', error);
       return [];

@@ -1,10 +1,10 @@
-import React, { useState, useMemo, useEffect } from 'react';
-import { Search, Filter, Star, MapPin, SlidersHorizontal } from 'lucide-react';
-import { mockServices, mockCategories } from '../data/mockData';
-import { serviceService } from '../services/database';
+import React, { useState, useMemo } from 'react';
+import { Search, SlidersHorizontal } from 'lucide-react';
+import { mockCategories } from '../data/mockData';
 import { Service } from '../types';
 import { useLocation } from '../context/LocationContext';
 import { useAuth } from '../context/AuthContext';
+import { useData } from '../context/DataContext';
 import EnhancedServiceCard from '../components/EnhancedServiceCard';
 import BookingModal from '../components/BookingModal';
 import LocationSelector from '../components/LocationSelector';
@@ -16,8 +16,6 @@ const Services: React.FC = () => {
   const [rating, setRating] = useState('');
   const [sortBy, setSortBy] = useState('rating');
   const [showFilters, setShowFilters] = useState(false);
-  const [services, setServices] = useState<Service[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   
   // Booking modal state
   const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
@@ -26,39 +24,7 @@ const Services: React.FC = () => {
   
   const { selectedState, selectedCity, setSelectedState, setSelectedCity } = useLocation();
   const { user } = useAuth();
-
-  useEffect(() => {
-    loadServices();
-  }, []);
-
-  const loadServices = async () => {
-    setIsLoading(true);
-    try {
-      // Try to load from database first
-      const dbServices = await serviceService.getAllServices();
-      if (dbServices.length > 0) {
-        setServices(dbServices);
-      } else {
-        // Fallback to mock data if no services in database
-        // Convert mock services to match Service type (number id to string)
-        const convertedMockServices = mockServices.map(service => ({
-          ...service,
-          id: service.id.toString()
-        }));
-        setServices(convertedMockServices);
-      }
-    } catch (error) {
-      console.error('Error loading services:', error);
-      // Fallback to mock data on error
-      const convertedMockServices = mockServices.map(service => ({
-        ...service,
-        id: service.id.toString()
-      }));
-      setServices(convertedMockServices);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  const { services, isLoadingServices: isLoading } = useData();
 
   // Booking handlers
   const handleBookNow = (service: Service) => {

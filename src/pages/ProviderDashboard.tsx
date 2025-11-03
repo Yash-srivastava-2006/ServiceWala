@@ -39,6 +39,7 @@ const ProviderDashboard: React.FC = () => {
     monthlyEarnings: 0
   });
 
+  // Load data only once when component mounts
   useEffect(() => {
     // Check if user role is still loading from authentication
     if (!user) {
@@ -61,8 +62,10 @@ const ProviderDashboard: React.FC = () => {
     loadProviderServices();
     loadProviderRequests();
     loadProviderBookings();
-    
-    // Calculate stats from bookings
+  }, [user?.id, user?.role]); // Only depend on user id and role
+  
+  // Update stats when bookings, services, or requests change
+  useEffect(() => {
     const activeBookings = providerBookings.filter(booking => 
       ['confirmed', 'in_progress'].includes(booking.status)
     ).length;
@@ -85,7 +88,7 @@ const ProviderDashboard: React.FC = () => {
       pendingRequests: pendingRequests.length,
       monthlyEarnings
     }));
-  }, [user, providerBookings, providerServices.length, pendingRequests.length]);
+  }, [providerBookings, providerServices.length, pendingRequests.length]);
 
   const loadProviderServices = async () => {
     if (!user?.id) {
