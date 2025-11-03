@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useLocation as useRouterLocation } from 'react-router-dom';
-import { Menu, X, LogOut, Briefcase, Settings, Calendar, UserCircle, BarChart3 } from 'lucide-react';
+import { Menu, X, LogOut, Briefcase, Settings, UserCircle, BarChart3 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useLocation } from '../context/LocationContext';
 import LocationSelector from './LocationSelector';
@@ -17,6 +17,7 @@ const Navbar: React.FC = () => {
   const navLinks = [
     { path: '/', label: 'Home' },
     { path: '/services', label: 'Services' },
+    ...(user ? [{ path: '/bookings', label: 'My Bookings' }] : []),
     { path: '/how-it-works', label: 'How It Works' }
   ];
 
@@ -24,7 +25,7 @@ const Navbar: React.FC = () => {
     { path: '/profile', label: 'Profile', icon: UserCircle },
     ...(user?.role === 'provider' 
       ? [{ path: '/provider-dashboard', label: 'Dashboard', icon: BarChart3 }]
-      : [{ path: '/bookings', label: 'My Bookings', icon: Calendar }]
+      : [] // Removed My Bookings since it's now in main nav
     ),
     { path: '/settings', label: 'Settings', icon: Settings }
   ];

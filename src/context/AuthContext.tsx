@@ -8,6 +8,7 @@ import {
   User as FirebaseUser 
 } from 'firebase/auth';
 import { auth, googleProvider } from '../config/firebase';
+import supabase from '../config/supabase';
 import { AuthContextType, User } from '../types';
 import { userService } from '../services/database';
 
@@ -23,12 +24,28 @@ export const useAuth = () => {
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true); // Start with true to check auth state
   // Firebase-only authentication (demo/mock mode removed)
+
+  // Check for existing user data on mount
+  useEffect(() => {
+    const savedUser = localStorage.getItem('user');
+    if (savedUser) {
+      try {
+        const parsedUser = JSON.parse(savedUser);
+        setUser(parsedUser);
+      } catch (error) {
+        console.error('Error parsing saved user data:', error);
+        localStorage.removeItem('user');
+      }
+    }
+  }, []);
 
   useEffect(() => {
     // Firebase auth state listener
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: FirebaseUser | null) => {
+      setIsLoading(true); // Set loading when auth state changes
+      
       if (firebaseUser) {
         // Try to get existing user data from Supabase first
         try {
@@ -86,6 +103,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               console.warn('⚠️ Using fallback user - some features may not work');
             }
           }
+          // Attempt to create a Supabase session using the Firebase ID token.
+          // This lets client-side Supabase requests satisfy row-level security policies
+          // that expect an authenticated supabase user.
+          try {
+            const idToken = await firebaseUser.getIdToken();
+            if (idToken) {
+              try {
+                // Best-effort: try to exchange the Firebase ID token for a Supabase session.
+                // We use 'google' provider here assuming Google sign-in flows; this may
+                // succeed for OAuth flows and for some Supabase setups. If it fails,
+                // we'll log a warning but continue (Supabase operations may be limited).
+                const { error: signInError, data: signInData } = await supabase.auth.signInWithIdToken({ provider: 'google', token: idToken } as any);
+                if (signInError) {
+                  console.warn('Could not create Supabase session from Firebase ID token:', signInError.message || signInError);
+                } else {
+                  console.log('Supabase session created from Firebase token (best-effort).');
+                }
+              } catch (innerErr) {
+                console.warn('Supabase signInWithIdToken attempt failed:', innerErr);
+              }
+            }
+          } catch (tokenErr) {
+            console.warn('Could not get Firebase ID token for Supabase session sync:', tokenErr);
+          }
         } catch (error) {
           console.error('❌ Error during user authentication:', error);
           
@@ -138,7 +179,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       
       // User state will be updated automatically by onAuthStateChanged
-      // Don't set loading to false here - let onAuthStateChanged handle it
+      // But we should reset loading state here to prevent hanging
+      setIsLoading(false);
     } catch (error) {
       setIsLoading(false); // Always reset loading state on error
       throw error; // Re-throw the original error to preserve Firebase error codes
@@ -151,6 +193,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       await signInWithPopup(auth, googleProvider);
       // User state will be updated automatically by onAuthStateChanged
+      setIsLoading(false);
     } catch (error) {
       setIsLoading(false);
       throw error;

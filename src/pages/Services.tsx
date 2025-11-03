@@ -1,10 +1,12 @@
-import React, { useState, useMemo, useEffect } from 'react';
-import { Search, Filter, Star, MapPin, SlidersHorizontal } from 'lucide-react';
-import { mockServices, mockCategories } from '../data/mockData';
-import { serviceService } from '../services/database';
+import React, { useState, useMemo } from 'react';
+import { Search, SlidersHorizontal } from 'lucide-react';
+import { mockCategories } from '../data/mockData';
 import { Service } from '../types';
 import { useLocation } from '../context/LocationContext';
-import ServiceCard from '../components/ServiceCard';
+import { useAuth } from '../context/AuthContext';
+import { useData } from '../context/DataContext';
+import EnhancedServiceCard from '../components/EnhancedServiceCard';
+import BookingModal from '../components/BookingModal';
 import LocationSelector from '../components/LocationSelector';
 
 const Services: React.FC = () => {
@@ -14,42 +16,34 @@ const Services: React.FC = () => {
   const [rating, setRating] = useState('');
   const [sortBy, setSortBy] = useState('rating');
   const [showFilters, setShowFilters] = useState(false);
-  const [services, setServices] = useState<Service[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  
+  // Booking modal state
+  const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
+  const [selectedService, setSelectedService] = useState<Service | null>(null);
+  const [bookingSuccess, setBookingSuccess] = useState(false);
   
   const { selectedState, selectedCity, setSelectedState, setSelectedCity } = useLocation();
+  const { user } = useAuth();
+  const { services, isLoadingServices: isLoading } = useData();
 
-  useEffect(() => {
-    loadServices();
-  }, []);
-
-  const loadServices = async () => {
-    setIsLoading(true);
-    try {
-      // Try to load from database first
-      const dbServices = await serviceService.getAllServices();
-      if (dbServices.length > 0) {
-        setServices(dbServices);
-      } else {
-        // Fallback to mock data if no services in database
-        // Convert mock services to match Service type (number id to string)
-        const convertedMockServices = mockServices.map(service => ({
-          ...service,
-          id: service.id.toString()
-        }));
-        setServices(convertedMockServices);
-      }
-    } catch (error) {
-      console.error('Error loading services:', error);
-      // Fallback to mock data on error
-      const convertedMockServices = mockServices.map(service => ({
-        ...service,
-        id: service.id.toString()
-      }));
-      setServices(convertedMockServices);
-    } finally {
-      setIsLoading(false);
+  // Booking handlers
+  const handleBookNow = (service: Service) => {
+    if (!user) {
+      alert('Please log in to book a service');
+      return;
     }
+    setSelectedService(service);
+    setIsBookingModalOpen(true);
+  };
+
+  const handleBookingSuccess = () => {
+    setBookingSuccess(true);
+    setTimeout(() => setBookingSuccess(false), 3000); // Hide success message after 3 seconds
+  };
+
+  const handleCloseBookingModal = () => {
+    setIsBookingModalOpen(false);
+    setSelectedService(null);
   };
 
   const filteredServices = useMemo(() => {
@@ -270,7 +264,12 @@ const Services: React.FC = () => {
             ) : filteredServices.length > 0 ? (
               <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {filteredServices.map((service) => (
-                  <ServiceCard key={service.id} service={service} />
+                  <EnhancedServiceCard 
+                    key={service.id} 
+                    service={service} 
+                    onClick={() => {/* Handle service click - could navigate to service detail */}} 
+                    onBookNow={handleBookNow}
+                  />
                 ))}
               </div>
             ) : (
@@ -301,6 +300,26 @@ const Services: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Success Message */}
+      {bookingSuccess && (
+        <div className="fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50">
+          <div className="flex items-center space-x-2">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+            <span>Booking request sent successfully!</span>
+          </div>
+        </div>
+      )}
+
+      {/* Booking Modal */}
+      <BookingModal
+        service={selectedService}
+        isOpen={isBookingModalOpen}
+        onClose={handleCloseBookingModal}
+        onBookingSuccess={handleBookingSuccess}
+      />
     </div>
   );
 };

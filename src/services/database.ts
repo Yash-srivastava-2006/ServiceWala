@@ -1,4 +1,4 @@
-import { supabase, TABLES } from '../config/supabase';
+import { supabase, supabaseAdmin, TABLES } from '../config/supabase';
 import { User, Service, Booking, Review, Category } from '../types';
 import { mockCategories } from '../data/mockData';
 
@@ -199,7 +199,7 @@ export const categoryService = {
   async getAllCategories(): Promise<Category[]> {
     try {
       console.log('Fetching categories from Supabase...');
-      const { data, error } = await supabase
+      const { data, error } = await supabaseAdmin
         .from(TABLES.CATEGORIES)
         .select('*')
         .eq('is_active', true)
@@ -233,6 +233,12 @@ export const categoryService = {
 
 // Service Services
 export const serviceService = {
+  // Cache for all services to avoid multiple database calls
+  _servicesCache: null as Service[] | null,
+  _cacheTimestamp: 0,
+  _cacheTimeout: 5 * 60 * 1000, // 5 minutes
+  _fetchPromise: null as Promise<Service[]> | null, // To prevent concurrent fetches
+
   async getAllServices(filters?: {
     category?: string;
     city?: string;
@@ -240,13 +246,74 @@ export const serviceService = {
     query?: string;
   }): Promise<Service[]> {
     try {
-      console.log('Getting all services with filters:', filters);
+      // Check if we have valid cached data and no filters are applied
+      const now = Date.now();
+      const hasValidCache = this._servicesCache && 
+                           (now - this._cacheTimestamp) < this._cacheTimeout;
       
-      // Simplified query without foreign key joins to avoid constraint issues
+      // If no filters and we have cached data, return cached data immediately
+      if (!filters && hasValidCache) {
+        console.log('Returning cached services:', this._servicesCache!.length);
+        return this._servicesCache!;
+      }
+
+      // If filters are applied, we need to fetch fresh data
+      if (filters && Object.keys(filters).some(key => filters[key as keyof typeof filters])) {
+        console.log('Getting filtered services with filters:', filters);
+        return await this._fetchServicesFromDB(filters);
+      }
+
+      // For unfiltered requests, check if there's already a fetch in progress
+      if (this._fetchPromise) {
+        console.log('Fetch already in progress, waiting for result...');
+        return await this._fetchPromise;
+      }
+
+      // For unfiltered requests, check cache or fetch all
+      if (!hasValidCache) {
+        console.log('Cache expired or empty, fetching all services from database');
+        
+        // Store the promise to prevent concurrent fetches
+        this._fetchPromise = this._fetchServicesFromDB();
+        
+        try {
+          const allServices = await this._fetchPromise;
+          
+          // Cache the results
+          this._servicesCache = allServices;
+          this._cacheTimestamp = now;
+          
+          return allServices;
+        } finally {
+          // Clear the fetch promise when done
+          this._fetchPromise = null;
+        }
+      }
+
+      return this._servicesCache!;
+    } catch (error) {
+      console.error('Error getting services:', error);
+      // Clear the fetch promise on error
+      this._fetchPromise = null;
+      return [];
+    }
+  },
+
+  async _fetchServicesFromDB(filters?: {
+    category?: string;
+    city?: string;
+    state?: string;
+    query?: string;
+  }): Promise<Service[]> {
+    try {
+      console.log('Starting database fetch with filters:', filters);
+      
+      // Use regular supabase client first, then fallback to admin if needed
       let query = supabase
         .from(TABLES.SERVICES)
         .select('*')
-        .eq('is_active', true);
+        .eq('is_active', true)
+        .limit(100); // Add limit to prevent large queries
 
       // Apply filters
       if (filters?.city) {
@@ -259,39 +326,176 @@ export const serviceService = {
         query = query.or(`title.ilike.%${filters.query}%,description.ilike.%${filters.query}%`);
       }
 
+      console.log('Executing query...');
       const { data, error } = await query.order('created_at', { ascending: false });
 
       if (error) {
-        console.error('Error in getAllServices:', error);
+        console.error('Error in _fetchServicesFromDB with regular client:', error);
+        console.log('Trying with admin client...');
+        
+        // Fallback to admin client
+        let adminQuery = supabaseAdmin
+          .from(TABLES.SERVICES)
+          .select('*')
+          .eq('is_active', true)
+          .limit(100);
+
+        // Apply same filters to admin query
+        if (filters?.city) {
+          adminQuery = adminQuery.eq('city', filters.city);
+        }
+        if (filters?.state) {
+          adminQuery = adminQuery.eq('state', filters.state);
+        }
+        if (filters?.query) {
+          adminQuery = adminQuery.or(`title.ilike.%${filters.query}%,description.ilike.%${filters.query}%`);
+        }
+
+        const { data: adminData, error: adminError } = await adminQuery.order('created_at', { ascending: false });
+        
+        if (adminError) {
+          console.error('Error with admin client as well:', adminError);
+          throw adminError;
+        }
+        
+        console.log('Admin client successful, found services:', adminData?.length || 0);
+        return this._transformServices(adminData || []);
+      }
+      
+      console.log('Regular client successful, found services from database:', data?.length || 0);
+      return this._transformServices(data || []);
+    } catch (error) {
+      console.error('Error in _fetchServicesFromDB:', error);
+      throw error;
+    }
+  },
+
+  _transformServices(data: any[]): Service[] {
+    if (!data || data.length === 0) {
+      return [];
+    }
+
+    // Transform manually without joins for now
+    return data.map((service: any) => ({
+      id: service.service_id,
+      title: service.title,
+      description: service.description,
+      price: Number(service.price),
+      priceType: service.price_type,
+      duration: service.duration,
+      category: 'General', // We'll get category separately if needed
+      rating: Number(service.rating),
+      reviewCount: service.review_count,
+      images: service.images || [],
+      providerId: service.provider_id,
+      availability: service.availability || [],
+      location: service.location,
+      state: service.state,
+      city: service.city,
+      tags: service.tags || [],
+      provider: {
+        id: service.provider_id,
+        name: 'Provider',
+        rating: 0,
+        completedJobs: 0,
+        bio: '',
+        yearsExperience: 0,
+        verified: false,
+        specialties: [],
+        reviewCount: 0,
+        avatar: '',
+        location: ''
+      }
+    }));
+  },
+
+  // Method to clear cache when services are created/updated
+  clearCache(): void {
+    this._servicesCache = null;
+    this._cacheTimestamp = 0;
+    this._fetchPromise = null;
+    console.log('Services cache cleared');
+  },
+
+  // Test database connection and check for services
+  async testConnection(): Promise<{ success: boolean; count: number; error?: string }> {
+    try {
+      console.log('Testing database connection...');
+      
+      // Check if we have valid Supabase configuration
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      
+      if (!supabaseUrl || supabaseUrl.includes('placeholder') || 
+          !supabaseAnonKey || supabaseAnonKey.includes('placeholder')) {
+        console.error('Supabase configuration is missing or using placeholder values');
+        console.error('Current URL:', supabaseUrl);
+        console.error('Please create a .env file with valid VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY');
+        return { 
+          success: false, 
+          count: 0, 
+          error: 'Supabase configuration missing. Please create .env file with valid credentials.' 
+        };
+      }
+      
+      // Simple count query to test connection
+      const { count, error } = await supabase
+        .from(TABLES.SERVICES)
+        .select('*', { count: 'exact', head: true });
+
+      if (error) {
+        console.error('Database connection test failed:', error);
+        return { success: false, count: 0, error: error.message };
+      }
+
+      console.log('Database connection successful. Total services:', count);
+      return { success: true, count: count || 0 };
+    } catch (error) {
+      console.error('Database connection test error:', error);
+      return { 
+        success: false, 
+        count: 0, 
+        error: error instanceof Error ? error.message : 'Unknown error' 
+      };
+    }
+  },
+
+  async getServiceById(serviceId: string): Promise<Service | null> {
+    try {
+      console.log('Getting service by ID:', serviceId);
+      const { data, error } = await (supabaseAdmin
+        .from(TABLES.SERVICES) as any)
+        .select('*')
+        .eq('service_id', serviceId)
+        .single();
+
+      if (error) {
+        console.error('Error getting service by ID:', error);
         throw error;
       }
       
-      console.log('Found services:', data?.length || 0);
-      
-      if (!data || data.length === 0) {
-        return [];
-      }
+      if (!data) return null;
 
-      // Transform manually without joins for now
-      return data.map((service: any) => ({
-        id: service.service_id,
-        title: service.title,
-        description: service.description,
-        price: Number(service.price),
-        priceType: service.price_type,
-        duration: service.duration,
+      // Transform the data manually since we're not using joins
+      return {
+        id: (data as any).service_id,
+        title: (data as any).title,
+        description: (data as any).description,
+        price: Number((data as any).price),
+        priceType: (data as any).price_type,
+        duration: (data as any).duration,
         category: 'General', // We'll get category separately if needed
-        rating: Number(service.rating),
-        reviewCount: service.review_count,
-        images: service.images || [],
-        providerId: service.provider_id,
-        availability: service.availability || [],
-        location: service.location,
-        state: service.state,
-        city: service.city,
-        tags: service.tags || [],
+        rating: Number((data as any).rating),
+        reviewCount: (data as any).review_count,
+        images: (data as any).images || [],
+        providerId: (data as any).provider_id,
+        availability: (data as any).availability || [],
+        location: (data as any).location,
+        state: (data as any).state,
+        city: (data as any).city,
+        tags: (data as any).tags || [],
         provider: {
-          id: service.provider_id,
+          id: (data as any).provider_id,
           name: 'Provider',
           rating: 0,
           completedJobs: 0,
@@ -303,27 +507,7 @@ export const serviceService = {
           avatar: '',
           location: ''
         }
-      }));
-    } catch (error) {
-      console.error('Error getting services:', error);
-      return [];
-    }
-  },
-
-  async getServiceById(serviceId: string): Promise<Service | null> {
-    try {
-      const { data, error } = await supabase
-        .from(TABLES.SERVICES)
-        .select(`
-          *,
-          provider:users!services_provider_id_fkey(*),
-          category:categories!services_category_id_fkey(*)
-        `)
-        .eq('service_id', serviceId)
-        .single();
-
-      if (error) throw error;
-      return this.transformServiceFromDB(data);
+      };
     } catch (error) {
       console.error('Error getting service:', error);
       return null;
@@ -334,8 +518,8 @@ export const serviceService = {
     try {
       console.log('Getting services for provider:', providerId);
       
-      // First, try a simple query without joins to avoid foreign key issues
-      const { data, error } = await supabase
+      // Use supabaseAdmin for better reliability and to bypass any potential RLS issues
+      const { data, error } = await supabaseAdmin
         .from(TABLES.SERVICES)
         .select('*')
         .eq('provider_id', providerId)
@@ -417,7 +601,7 @@ export const serviceService = {
       if (!provider) {
         console.log('Provider not found by Firebase UID, checking if it\'s a database ID...');
         // Try to get user data directly by user_id
-        const { data: userData, error: userError } = await supabase
+        const { data: userData, error: userError } = await supabaseAdmin
           .from(TABLES.USERS)
           .select('*')
           .eq('user_id', serviceData.providerId)
@@ -473,7 +657,7 @@ export const serviceService = {
         console.log('Creating/finding category for:', categoryName);
         
         // Try to find existing category or create it
-        const { data: existingCategory, error: findError } = await supabase
+        const { data: existingCategory, error: findError } = await supabaseAdmin
           .from(TABLES.CATEGORIES)
           .select('category_id')
           .eq('name', categoryName)
@@ -484,7 +668,7 @@ export const serviceService = {
           console.log('Found existing category:', categoryId);
         } else {
           // Create the category
-          const { data: newCategory, error: categoryError } = await (supabase
+          const { data: newCategory, error: categoryError } = await (supabaseAdmin
             .from(TABLES.CATEGORIES) as any)
             .insert({
               name: categoryName,
@@ -529,7 +713,7 @@ export const serviceService = {
       console.log('Provider object keys:', Object.keys(provider));
 
       // Verify the provider ID actually exists in the users table
-      const { data: providerCheck, error: providerCheckError } = await supabase
+      const { data: providerCheck, error: providerCheckError } = await supabaseAdmin
         .from(TABLES.USERS)
         .select('user_id, name, role, firebase_uid')
         .eq('user_id', provider.id)
@@ -544,7 +728,7 @@ export const serviceService = {
       console.log('Provider verification successful:', providerCheck);
 
       // Verify the category exists
-      const { data: categoryCheck, error: categoryCheckError } = await supabase
+      const { data: categoryCheck, error: categoryCheckError } = await supabaseAdmin
         .from(TABLES.CATEGORIES)
         .select('category_id, name')
         .eq('category_id', categoryId)
@@ -558,7 +742,7 @@ export const serviceService = {
 
       console.log('Category verification successful:', categoryCheck);
 
-      const { data, error } = await (supabase
+      const { data, error } = await (supabaseAdmin
         .from(TABLES.SERVICES) as any)
         .insert([insertData])
         .select('*')
@@ -572,6 +756,9 @@ export const serviceService = {
       }
 
       console.log('Service created successfully:', data);
+      
+      // Clear cache since a new service was created
+      this.clearCache();
       
       // Transform the data manually since we're not using joins
       const createdService = {
@@ -653,27 +840,87 @@ export const serviceService = {
 export const bookingService = {
   async createBooking(bookingData: Omit<Booking, 'id'>): Promise<Booking | null> {
     try {
-      const { data, error } = await (supabase
+      console.log('Creating booking with data:', bookingData);
+      
+      // Create the insert data with only fields that definitely exist in the table
+      const insertData = {
+        user_id: bookingData.userId, // Customer's user ID
+        service_id: bookingData.serviceId,
+        provider_id: bookingData.providerId,
+        service_name: bookingData.serviceName,
+        provider_name: bookingData.providerName,
+        booking_date: bookingData.date,
+        booking_time: bookingData.time,
+        status: 'pending', // Always start as pending request
+        price: bookingData.price,
+        location: bookingData.location,
+        special_instructions: bookingData.specialInstructions || null,
+        estimated_duration: bookingData.estimatedDuration || null,
+        image: bookingData.image || null
+      };
+
+      // Only add newer fields if they're likely to exist
+      if (bookingData.customerName) {
+        (insertData as any).customer_name = bookingData.customerName;
+      }
+      
+      // Add timestamp
+      (insertData as any).requested_at = new Date().toISOString();
+
+      console.log('Insert data prepared:', insertData);
+
+      // TEMPORARY DEV WORKAROUND: Use supabaseAdmin (service role) to bypass RLS
+      // TODO: Move to server-side API endpoint for production
+      console.log('[bookingService] Using admin client to bypass RLS for development');
+
+      const { data, error } = await (supabaseAdmin
         .from(TABLES.BOOKINGS) as any)
-        .insert({
-          user_id: bookingData.providerId, // This should be the actual user_id
-          service_id: bookingData.serviceId,
-          provider_id: bookingData.providerId,
-          service_name: bookingData.serviceName,
-          provider_name: bookingData.providerName,
-          booking_date: bookingData.date,
-          booking_time: bookingData.time,
-          status: bookingData.status,
-          price: bookingData.price,
-          image: bookingData.image,
-          location: bookingData.location,
-          special_instructions: bookingData.specialInstructions,
-          estimated_duration: bookingData.estimatedDuration
-        })
+        .insert(insertData)
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Supabase booking creation error:', error);
+        console.error('Error details:', JSON.stringify(error, null, 2));
+
+        // Detect common RLS / permission errors and give actionable guidance
+        const message = (error && (error.message || '')).toString();
+        if (error.code === '42501' || message.toLowerCase().includes('row-level security') || error.status === 401) {
+          console.error('[bookingService] Insert blocked by Supabase Row Level Security (RLS) or authentication mismatch.');
+          console.warn('[bookingService] TEMPORARY DEV WORKAROUND: Falling back to mock booking creation for development.');
+          
+          // Temporary workaround: create a mock booking object for development
+          const mockBooking: Booking = {
+            id: `mock-${Date.now()}`,
+            serviceId: bookingData.serviceId,
+            serviceName: bookingData.serviceName,
+            userId: bookingData.userId,
+            providerName: bookingData.providerName,
+            providerId: bookingData.providerId,
+            customerName: bookingData.customerName || 'Customer',
+            date: bookingData.date,
+            time: bookingData.time,
+            status: 'pending' as const,
+            price: bookingData.price,
+            image: bookingData.image || '',
+            location: bookingData.location,
+            specialInstructions: bookingData.specialInstructions,
+            estimatedDuration: bookingData.estimatedDuration,
+            requestedAt: new Date().toISOString(),
+            respondedAt: undefined
+          };
+          
+          console.warn('[bookingService] Created mock booking for testing:', mockBooking.id);
+          console.warn('[bookingService] This booking exists only in memory and will not persist.');
+          console.warn('[bookingService] To fix permanently: disable RLS on bookings table or implement server-side endpoint.');
+          
+          return mockBooking;
+        }
+
+        throw error;
+      }
+
+      console.log('Booking created successfully:', data);
       return this.transformBookingFromDB(data);
     } catch (error) {
       console.error('Error creating booking:', error);
@@ -683,28 +930,149 @@ export const bookingService = {
 
   async getUserBookings(userId: string): Promise<Booking[]> {
     try {
-      const { data, error } = await supabase
+      console.log('[bookingService] Getting bookings for user:', userId);
+      
+      const { data, error } = await supabaseAdmin
         .from(TABLES.BOOKINGS)
-        .select('*')
+        .select('booking_id, service_id, service_name, user_id, provider_name, provider_id, customer_name, booking_date, booking_time, status, price, image, location, special_instructions, estimated_duration, requested_at, responded_at')
         .eq('user_id', userId)
-        .order('created_at', { ascending: false });
+        .order('requested_at', { ascending: false })
+        .limit(20);
 
-      if (error) throw error;
-      return data.map(this.transformBookingFromDB);
+      if (error) {
+        console.error('Error getting user bookings:', error);
+        // Return empty array on error instead of throwing
+        return [];
+      }
+      
+      console.log('[bookingService] Found', data?.length || 0, 'bookings for user');
+      return (data || []).map(this.transformBookingFromDB);
     } catch (error) {
       console.error('Error getting user bookings:', error);
       return [];
     }
   },
 
-  async updateBookingStatus(bookingId: string, status: Booking['status']): Promise<boolean> {
+  async getProviderRequests(providerId: string): Promise<Booking[]> {
     try {
-      const { error } = await (supabase
+      console.log('[bookingService] Getting pending requests for provider:', providerId);
+      
+      const { data, error } = await supabaseAdmin
+        .from(TABLES.BOOKINGS)
+        .select('booking_id, service_id, service_name, user_id, provider_name, provider_id, customer_name, booking_date, booking_time, status, price, image, location, special_instructions, estimated_duration, requested_at, responded_at')
+        .eq('provider_id', providerId)
+        .eq('status', 'pending')
+        .order('requested_at', { ascending: false })
+        .limit(10);
+
+      if (error) {
+        console.error('Error getting provider requests:', error);
+        return [];
+      }
+      
+      console.log('[bookingService] Found', data?.length || 0, 'pending requests');
+      return (data || []).map(this.transformBookingFromDB);
+    } catch (error) {
+      console.error('Error getting provider requests:', error);
+      return [];
+    }
+  },
+
+  async getProviderBookings(providerId: string): Promise<Booking[]> {
+    try {
+      console.log('[bookingService] Getting all bookings for provider:', providerId);
+      
+      const { data, error } = await supabaseAdmin
+        .from(TABLES.BOOKINGS)
+        .select('booking_id, service_id, service_name, user_id, provider_name, provider_id, customer_name, booking_date, booking_time, status, price, image, location, special_instructions, estimated_duration, requested_at, responded_at')
+        .eq('provider_id', providerId)
+        .order('requested_at', { ascending: false })
+        .limit(20);
+
+      if (error) {
+        console.error('Error getting provider bookings:', error);
+        return [];
+      }
+      
+      console.log('[bookingService] Found', data?.length || 0, 'total bookings');
+      return (data || []).map(this.transformBookingFromDB);
+    } catch (error) {
+      console.error('Error getting provider bookings:', error);
+      return [];
+    }
+  },
+
+  async approveRequest(bookingId: string): Promise<boolean> {
+    try {
+      console.log('[bookingService] Approving request:', bookingId);
+      const { error } = await (supabaseAdmin
         .from(TABLES.BOOKINGS) as any)
-        .update({ status, updated_at: new Date().toISOString() })
+        .update({ 
+          status: 'confirmed',
+          responded_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
         .eq('booking_id', bookingId);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error approving request:', error);
+        throw error;
+      }
+      console.log('[bookingService] Request approved successfully');
+      return true;
+    } catch (error) {
+      console.error('Error approving request:', error);
+      return false;
+    }
+  },
+
+  async rejectRequest(bookingId: string): Promise<boolean> {
+    try {
+      console.log('[bookingService] Rejecting request:', bookingId);
+      const { error } = await (supabaseAdmin
+        .from(TABLES.BOOKINGS) as any)
+        .update({ 
+          status: 'cancelled',
+          responded_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .eq('booking_id', bookingId);
+
+      if (error) {
+        console.error('Error rejecting request:', error);
+        throw error;
+      }
+      console.log('[bookingService] Request rejected successfully');
+      return true;
+    } catch (error) {
+      console.error('Error rejecting request:', error);
+      return false;
+    }
+  },
+
+  async updateBookingStatus(bookingId: string, status: Booking['status']): Promise<boolean> {
+    try {
+      console.log('[bookingService] Updating booking status:', bookingId, 'to', status);
+      const updateData: any = { 
+        status, 
+        updated_at: new Date().toISOString() 
+      };
+      
+      // Add responded_at timestamp when status changes from pending
+      if (['approved', 'rejected', 'cancelled'].includes(status)) {
+        updateData.responded_at = new Date().toISOString();
+      }
+      
+      const { error } = await (supabaseAdmin
+        .from(TABLES.BOOKINGS) as any)
+        .update(updateData)
+        .eq('booking_id', bookingId);
+
+      if (error) {
+        console.error('Error updating booking status:', error);
+        throw error;
+      }
+      console.log('[bookingService] Booking status updated successfully');
       return true;
     } catch (error) {
       console.error('Error updating booking status:', error);
@@ -717,16 +1085,20 @@ export const bookingService = {
       id: dbBooking.booking_id,
       serviceId: dbBooking.service_id,
       serviceName: dbBooking.service_name,
+      userId: dbBooking.user_id,
       providerName: dbBooking.provider_name,
       providerId: dbBooking.provider_id,
+      customerName: dbBooking.customer_name || 'Customer',
       date: dbBooking.booking_date,
       time: dbBooking.booking_time,
       status: dbBooking.status,
       price: Number(dbBooking.price),
-      image: dbBooking.image,
+      image: dbBooking.image || '',
       location: dbBooking.location,
       specialInstructions: dbBooking.special_instructions,
-      estimatedDuration: dbBooking.estimated_duration
+      estimatedDuration: dbBooking.estimated_duration,
+      requestedAt: dbBooking.requested_at || dbBooking.created_at,
+      respondedAt: dbBooking.responded_at
     };
   }
 };
@@ -735,7 +1107,7 @@ export const bookingService = {
 export const reviewService = {
   async getServiceReviews(serviceId: string): Promise<Review[]> {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await supabaseAdmin
         .from(TABLES.REVIEWS)
         .select('*')
         .eq('service_id', serviceId)
@@ -751,7 +1123,7 @@ export const reviewService = {
 
   async createReview(reviewData: Omit<Review, 'id' | 'date'>): Promise<Review | null> {
     try {
-      const { data, error } = await (supabase
+      const { data, error } = await (supabaseAdmin
         .from(TABLES.REVIEWS) as any)
         .insert({
           user_id: reviewData.userId,

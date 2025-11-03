@@ -4,14 +4,15 @@ import {
   ArrowLeft, 
   Plus, 
   X, 
-  DollarSign,
   Tag,
   AlertCircle,
-  CheckCircle
+  CheckCircle,
+  Upload
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { serviceService, categoryService } from '../services/database';
 import { mockCategories, indianStates } from '../data/mockData';
+import { validateImageFile, convertImageToBase64 } from '../utils/imageUtils';
 
 interface ServiceFormData {
   title: string;
@@ -53,6 +54,7 @@ const AddService: React.FC = () => {
   const [success, setSuccess] = useState(false);
   const [newTag, setNewTag] = useState('');
   const [imageUrl, setImageUrl] = useState('');
+  const [uploadingImages, setUploadingImages] = useState(false);
 
   const weekDays = [
     'Monday', 'Tuesday', 'Wednesday', 'Thursday', 
@@ -136,6 +138,47 @@ const AddService: React.FC = () => {
         images: [...prev.images, imageUrl.trim()]
       }));
       setImageUrl('');
+    }
+  };
+
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+
+    setUploadingImages(true);
+    setError('');
+
+    try {
+      const uploadedUrls: string[] = [];
+      
+      for (const file of Array.from(files)) {
+        // Validate file
+        const validation = validateImageFile(file);
+        if (!validation.isValid) {
+          setError(validation.error || 'Invalid file');
+          setUploadingImages(false);
+          return;
+        }
+
+        // Convert to base64 for storage
+        const base64Url = await convertImageToBase64(file);
+        uploadedUrls.push(base64Url);
+      }
+
+      // Add to form data
+      setFormData(prev => ({
+        ...prev,
+        images: [...prev.images, ...uploadedUrls]
+      }));
+
+      console.log(`✅ Uploaded ${uploadedUrls.length} images successfully`);
+    } catch (error) {
+      console.error('Error uploading images:', error);
+      setError('Failed to upload images. Please try again.');
+    } finally {
+      setUploadingImages(false);
+      // Reset input
+      event.target.value = '';
     }
   };
 
@@ -377,7 +420,6 @@ const AddService: React.FC = () => {
                 Price (₹) *
               </label>
               <div className="relative">
-                <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                 <input
                   type="number"
                   id="price"
@@ -387,7 +429,7 @@ const AddService: React.FC = () => {
                   placeholder="0"
                   min="0"
                   step="0.01"
-                  className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   required
                 />
               </div>
@@ -500,13 +542,39 @@ const AddService: React.FC = () => {
             <label className="block text-sm font-medium text-gray-700 mb-3">
               Service Images
             </label>
-            <div className="space-y-3">
+            <div className="space-y-4">
+              {/* File Upload Section */}
+              <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition-colors">
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={handleFileUpload}
+                  className="hidden"
+                  id="image-upload"
+                  disabled={uploadingImages}
+                />
+                <label
+                  htmlFor="image-upload"
+                  className="cursor-pointer flex flex-col items-center space-y-2"
+                >
+                  <Upload className="w-8 h-8 text-gray-400" />
+                  <span className="text-sm text-gray-600">
+                    {uploadingImages ? 'Uploading images...' : 'Click to upload images'}
+                  </span>
+                  <span className="text-xs text-gray-500">
+                    PNG, JPG, GIF up to 5MB each
+                  </span>
+                </label>
+              </div>
+
+              {/* URL Input (Alternative) */}
               <div className="flex gap-2">
                 <input
                   type="url"
                   value={imageUrl}
                   onChange={(e) => setImageUrl(e.target.value)}
-                  placeholder="Enter image URL"
+                  placeholder="Or enter image URL"
                   className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
                 <button

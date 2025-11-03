@@ -81,10 +81,74 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const loadServices = async () => {
     setIsLoadingServices(true);
     try {
+      console.log('DataContext: Starting to load services...');
+      
+      // First test the database connection
+      const connectionTest = await serviceService.testConnection();
+      console.log('Database connection test result:', connectionTest);
+      
+      if (!connectionTest.success) {
+        console.warn('Database connection failed, using mock data:', connectionTest.error);
+        
+        // Show helpful message for configuration issues
+        if (connectionTest.error?.includes('configuration missing')) {
+          console.warn('🔧 SETUP REQUIRED: Create a .env file with your Supabase credentials');
+          console.warn('📋 Copy .env.example to .env and fill in your Supabase project details');
+          console.warn('🎯 Using mock data for now - services will work but data won\'t persist');
+        }
+        
+        const { mockServices } = await import('../data/mockData');
+        const convertedMockServices = mockServices.map(service => ({
+          ...service,
+          id: service.id.toString()
+        }));
+        setServices(convertedMockServices);
+        return;
+      }
+
+      if (connectionTest.count === 0) {
+        console.warn('Database is empty (no services found), using mock data');
+        const { mockServices } = await import('../data/mockData');
+        const convertedMockServices = mockServices.map(service => ({
+          ...service,
+          id: service.id.toString()
+        }));
+        setServices(convertedMockServices);
+        return;
+      }
+
+      // Try to load services from database
+      console.log('Loading services from database...');
       const servicesData = await serviceService.getAllServices();
-      setServices(servicesData);
+      
+      if (servicesData.length > 0) {
+        console.log('Successfully loaded', servicesData.length, 'services from database');
+        setServices(servicesData);
+      } else {
+        console.warn('No services returned from database, using mock data');
+        const { mockServices } = await import('../data/mockData');
+        const convertedMockServices = mockServices.map(service => ({
+          ...service,
+          id: service.id.toString()
+        }));
+        setServices(convertedMockServices);
+      }
     } catch (error) {
       console.error('Error loading services:', error);
+      console.log('Falling back to mock data due to error');
+      
+      // Fallback to mock data on error
+      try {
+        const { mockServices } = await import('../data/mockData');
+        const convertedMockServices = mockServices.map(service => ({
+          ...service,
+          id: service.id.toString()
+        }));
+        setServices(convertedMockServices);
+      } catch (mockError) {
+        console.error('Error loading mock data:', mockError);
+        setServices([]);
+      }
     } finally {
       setIsLoadingServices(false);
     }

@@ -1,65 +1,63 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { Calendar, Clock, MapPin, Star, MessageCircle, Phone, MoreVertical } from 'lucide-react';
 import { Booking } from '../types';
+import { useAuth } from '../context/AuthContext';
+import { bookingService } from '../services/database';
 
 const Bookings: React.FC = () => {
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<'upcoming' | 'past' | 'cancelled'>('upcoming');
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState('');
 
-  // Mock bookings data
-  const mockBookings: Booking[] = [
-    {
-      id: '1',
-      serviceId: '1',
-      serviceName: 'House Cleaning',
-      providerId: 'provider-1',
-      providerName: 'CleanPro Services',
-      date: '2024-02-15',
-      time: '10:00 AM',
-      status: 'confirmed',
-      price: 80,
-      image: 'https://images.pexels.com/photos/4239146/pexels-photo-4239146.jpeg?auto=compress&cs=tinysrgb&w=300',
-      location: 'Downtown Area'
-    },
-    {
-      id: '2',
-      serviceId: '2',
-      serviceName: 'Plumbing Repair',
-      providerId: 'provider-2',
-      providerName: 'FixIt Fast',
-      date: '2024-02-18',
-      time: '2:00 PM',
-      status: 'pending',
-      price: 120,
-      image: 'https://images.pexels.com/photos/8486944/pexels-photo-8486944.jpeg?auto=compress&cs=tinysrgb&w=300',
-      location: 'City Wide'
-    },
-    {
-      id: '3',
-      serviceId: '3',
-      serviceName: 'Garden Maintenance',
-      providerId: 'provider-3',
-      providerName: 'Green Thumb Co.',
-      date: '2024-01-20',
-      time: '9:00 AM',
-      status: 'completed',
-      price: 95,
-      image: 'https://images.pexels.com/photos/1301856/pexels-photo-1301856.jpeg?auto=compress&cs=tinysrgb&w=300',
-      location: 'Suburban Areas'
-    },
-    {
-      id: '4',
-      serviceId: '4',
-      serviceName: 'Pet Sitting',
-      providerId: 'provider-4',
-      providerName: 'Paws & Care',
-      date: '2024-01-10',
-      time: '8:00 AM',
-      status: 'cancelled',
-      price: 45,
-      image: 'https://images.pexels.com/photos/4587998/pexels-photo-4587998.jpeg?auto=compress&cs=tinysrgb&w=300',
-      location: 'Local Area'
+  // Load user bookings
+  useEffect(() => {
+    const loadBookings = async () => {
+      if (!user) {
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        setIsLoading(true);
+        console.log('Loading bookings for user:', user.id);
+        const userBookings = await bookingService.getUserBookings(user.id);
+        console.log('Loaded bookings:', userBookings);
+        setBookings(userBookings);
+        setError('');
+      } catch (err) {
+        console.error('Error loading bookings:', err);
+        setError('Failed to load bookings');
+        setBookings([]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadBookings();
+  }, [user]);
+
+  // Refresh bookings (can be called from BookingModal)
+  const refreshBookings = async () => {
+    if (user) {
+      try {
+        const userBookings = await bookingService.getUserBookings(user.id);
+        setBookings(userBookings);
+      } catch (err) {
+        console.error('Error refreshing bookings:', err);
+      }
     }
-  ];
+  };
+
+  // Expose refresh function globally so BookingModal can call it
+  useEffect(() => {
+    (window as any).refreshBookings = refreshBookings;
+    return () => {
+      delete (window as any).refreshBookings;
+    };
+  }, [user]);
 
   const getFilteredBookings = () => {
     const today = new Date();
@@ -67,24 +65,25 @@ const Bookings: React.FC = () => {
 
     switch (activeTab) {
       case 'upcoming':
-        return mockBookings.filter(booking => {
+        return bookings.filter(booking => {
           const bookingDate = new Date(booking.date);
           return bookingDate >= today && booking.status !== 'cancelled';
         });
       case 'past':
-        return mockBookings.filter(booking => {
+        return bookings.filter(booking => {
           const bookingDate = new Date(booking.date);
           return bookingDate < today || booking.status === 'completed';
         });
       case 'cancelled':
-        return mockBookings.filter(booking => booking.status === 'cancelled');
+        return bookings.filter(booking => booking.status === 'cancelled');
       default:
-        return mockBookings;
+        return bookings;
     }
   };
 
   const getStatusColor = (status: string) => {
     switch (status) {
+      case 'approved':
       case 'confirmed':
         return 'bg-green-100 text-green-800';
       case 'pending':
@@ -92,13 +91,44 @@ const Bookings: React.FC = () => {
       case 'completed':
         return 'bg-blue-100 text-blue-800';
       case 'cancelled':
+      case 'rejected':
         return 'bg-red-100 text-red-800';
+      case 'in_progress':
+        return 'bg-purple-100 text-purple-800';
       default:
         return 'bg-gray-100 text-gray-800';
     }
   };
 
   const filteredBookings = getFilteredBookings();
+
+  // Show loading or login prompt
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-gray-50 py-8">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="bg-white rounded-lg shadow-md p-12 text-center">
+            <Calendar className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">Please log in</h3>
+            <p className="text-gray-500 mb-6">You need to be logged in to view your bookings.</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 py-8">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="bg-white rounded-lg shadow-md p-12 text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p className="text-gray-500">Loading your bookings...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 py-8">
@@ -114,9 +144,9 @@ const Bookings: React.FC = () => {
           <div className="border-b border-gray-200">
             <nav className="flex space-x-8 px-6">
               {[
-                { key: 'upcoming', label: 'Upcoming', count: mockBookings.filter(b => new Date(b.date) >= new Date() && b.status !== 'cancelled').length },
-                { key: 'past', label: 'Past', count: mockBookings.filter(b => new Date(b.date) < new Date() || b.status === 'completed').length },
-                { key: 'cancelled', label: 'Cancelled', count: mockBookings.filter(b => b.status === 'cancelled').length }
+                { key: 'upcoming', label: 'Upcoming', count: bookings.filter(b => new Date(b.date) >= new Date() && b.status !== 'cancelled').length },
+                { key: 'past', label: 'Past', count: bookings.filter(b => new Date(b.date) < new Date() || b.status === 'completed').length },
+                { key: 'cancelled', label: 'Cancelled', count: bookings.filter(b => b.status === 'cancelled').length }
               ].map((tab) => (
                 <button
                   key={tab.key}
@@ -172,39 +202,45 @@ const Bookings: React.FC = () => {
                       </div>
                     </div>
                     <div className="text-right">
-                      <p className="text-2xl font-bold text-gray-900">${booking.price}</p>
+                      <p className="text-2xl font-bold text-gray-900">₹{booking.price}</p>
                       <button className="mt-2 p-2 hover:bg-gray-100 rounded-full transition-colors">
                         <MoreVertical className="h-5 w-5 text-gray-400" />
                       </button>
                     </div>
                   </div>
 
-                  {/* Action Buttons */}
-                  <div className="mt-6 flex space-x-3">
-                    {booking.status === 'confirmed' && (
-                      <>
-                        <button className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors">
-                          <MessageCircle className="h-4 w-4" />
-                          <span>Message Provider</span>
-                        </button>
-                        <button className="flex items-center space-x-2 border border-gray-300 hover:bg-gray-50 text-gray-700 px-4 py-2 rounded-lg transition-colors">
-                          <Phone className="h-4 w-4" />
-                          <span>Call</span>
-                        </button>
-                      </>
-                    )}
-                    {booking.status === 'completed' && (
-                      <button className="flex items-center space-x-2 bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded-lg transition-colors">
-                        <Star className="h-4 w-4" />
-                        <span>Leave Review</span>
-                      </button>
-                    )}
-                    {booking.status === 'pending' && (
-                      <button className="flex items-center space-x-2 border border-red-300 hover:bg-red-50 text-red-700 px-4 py-2 rounded-lg transition-colors">
-                        <span>Cancel Booking</span>
-                      </button>
-                    )}
-                  </div>
+                        <div className="mt-6 flex space-x-3">
+                          <Link
+                            to={`/booking/${booking.id}`}
+                            className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
+                          >
+                            <span>View Details</span>
+                          </Link>
+                          
+                          {(booking.status === 'approved' || booking.status === 'in_progress') && (
+                            <>
+                              <button className="flex items-center space-x-2 border border-gray-300 hover:bg-gray-50 text-gray-700 px-4 py-2 rounded-lg transition-colors">
+                                <MessageCircle className="h-4 w-4" />
+                                <span>Message Provider</span>
+                              </button>
+                              <button className="flex items-center space-x-2 border border-gray-300 hover:bg-gray-50 text-gray-700 px-4 py-2 rounded-lg transition-colors">
+                                <Phone className="h-4 w-4" />
+                                <span>Call</span>
+                              </button>
+                            </>
+                          )}
+                          {booking.status === 'completed' && (
+                            <button className="flex items-center space-x-2 bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded-lg transition-colors">
+                              <Star className="h-4 w-4" />
+                              <span>Leave Review</span>
+                            </button>
+                          )}
+                          {booking.status === 'pending' && (
+                            <button className="flex items-center space-x-2 border border-red-300 hover:bg-red-50 text-red-700 px-4 py-2 rounded-lg transition-colors">
+                              <span>Cancel Request</span>
+                            </button>
+                          )}
+                        </div>
                 </div>
               </div>
             ))}
